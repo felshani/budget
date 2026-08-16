@@ -1,7 +1,14 @@
-# Budget — Meilenstein 0
+# Budget
 
-Prüfblatt für das Fundament der Finanz-App: Installation aufs iPhone,
-Offline-Betrieb, dauerhafter Speicher und Sicherung.
+Private Budget-App für einen Schweizer Zweipersonenhaushalt. Vollständige
+Spezifikation: `docs/PRD.md`.
+
+Meilenstein 0 prüfte das Fundament (Installation aufs iPhone, Offline-Betrieb,
+dauerhafter Speicher, Sicherung) — das Prüfblatt dazu ist weiterhin unter dem
+Tab „Mehr“ zu finden. Meilenstein 1 baut darauf die Stammdaten- und
+Budgetverwaltung: Personen, Töpfe, Kategorien, Budgetposten, Einnahmen,
+Konten und Investments anlegen, dazu eine Übersicht mit geplantem Sparbetrag
+und Beitrag je Person und Topf.
 
 ## Dateien
 
@@ -66,6 +73,6 @@ sichert.
 
 ## Aktualisieren
 
-Nach jeder Änderung an `index.html` die Zeile `const CACHE = 'budget-m0-v1';`
-in `sw.js` hochzählen (`-v2`, `-v3` …). Sonst zeigt das iPhone die alte
-Fassung aus dem Cache.
+Nach jeder Änderung an `index.html` die Konstante `CACHE` in `sw.js`
+hochzählen (`budget-m1-v1` → `budget-m1-v2` …). Sonst zeigt das iPhone die
+alte Fassung aus dem Cache.
