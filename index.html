@@ -89,16 +89,20 @@ h2{font-size:12px;letter-spacing:.09em;text-transform:uppercase;color:var(--ink-
 .badge-V{color:var(--stamp);border-color:var(--stamp)}
 
 /* Bearbeitungsformular */
-.editform{padding:2px 0 18px;display:flex;flex-direction:column;gap:12px}
+.editform{padding:2px 0 18px;display:flex;flex-direction:column;gap:12px;min-width:0}
+.feld{min-width:0}
 .feld label{display:block;font-size:12.5px;color:var(--ink-soft);margin:0 0 6px}
-.feldzeile{display:flex;gap:10px}
+.feldzeile{display:flex;gap:10px;min-width:0}
 .feldzeile>.feld{flex:1;min-width:0}
 input[type=text],input[type=number],input[type=month],input[type=date],select{
-  width:100%;font:inherit;font-family:var(--mono);font-size:16px;
+  width:100%;max-width:100%;font:inherit;font-family:var(--mono);font-size:16px;
   padding:11px 12px;border:1px solid var(--rule);border-radius:9px;
   background:var(--paper);color:var(--ink);
 }
 select{font-family:var(--sans);-webkit-appearance:none;appearance:none}
+.info-knopf{background:transparent;border:0;color:var(--ink-soft);font-size:13px;
+  padding:0 0 0 4px;cursor:pointer;vertical-align:1px}
+.info-text{margin-top:6px}
 input:focus-visible,button:focus-visible,select:focus-visible{outline:2px solid var(--ok);outline-offset:2px}
 
 .monatsraster{display:grid;grid-template-columns:repeat(6,1fr);gap:6px}
@@ -174,6 +178,26 @@ nav.tabbar button{
 nav.tabbar button .ic{font-size:19px;line-height:1}
 nav.tabbar button.active{color:var(--ok)}
 nav.tabbar button:active{opacity:.7}
+
+/* Dialog fuer Neuanlagen */
+.dialog-overlay{
+  position:fixed;inset:0;background:rgba(0,0,0,.5);display:none;
+  align-items:center;justify-content:center;
+  padding:max(20px,env(safe-area-inset-top)) 20px max(20px,env(safe-area-inset-bottom));z-index:50;
+}
+.dialog-overlay.offen{display:flex}
+.dialog-box{
+  background:var(--card);border-radius:14px;max-width:440px;width:100%;
+  max-height:85vh;display:flex;flex-direction:column;overflow:hidden;
+}
+.dialog-kopf{display:flex;align-items:center;justify-content:space-between;
+  padding:14px 16px;border-bottom:1px solid var(--rule)}
+.dialog-kopf h3{margin:0;font-size:15px;font-weight:650}
+.dialog-schliessen{background:transparent;border:0;color:var(--ink-soft);
+  font-size:22px;line-height:1;padding:4px 8px;border-radius:8px}
+.dialog-inhalt{padding:16px;overflow-y:auto;flex:1;min-width:0}
+.dialog-fuss{padding:12px 16px;border-top:1px solid var(--rule)}
+.dialog-fuss button{width:100%}
 </style>
 </head>
 <body>
@@ -287,7 +311,7 @@ nav.tabbar button:active{opacity:.7}
         <p class="note" id="sicherung-status" style="margin-bottom:12px"></p>
         <div class="btns" style="margin-top:0">
           <button type="button" data-action="sicherung-teilen">Teilen</button>
-          <button type="button" class="ghost" data-action="sicherung-herunterladen">Herunterladen</button>
+          <button type="button" class="ghost" data-action="sicherung-herunterladen">Speichern</button>
           <button type="button" class="ghost" data-action="sicherung-kopieren">Kopieren</button>
         </div>
         <label for="sicherung-datei">Sicherung wiederherstellen</label>
@@ -340,6 +364,10 @@ nav.tabbar button:active{opacity:.7}
     <button type="button" data-action="tab" data-tab="investment"><span class="ic">📈</span>Investment</button>
     <button type="button" data-action="tab" data-tab="mehr"><span class="ic">⋯</span>Mehr</button>
   </nav>
+
+  <div class="dialog-overlay" id="dialog-overlay">
+    <div class="dialog-box" id="dialog-box"></div>
+  </div>
 </div>
 
 <script>
@@ -362,10 +390,11 @@ function escapeHtml(s) {
 function formatCHF(n) {
   n = Number(n) || 0;
   const neg = n < 0; n = Math.abs(n);
-  const fest = n.toFixed(2);
+  const hatRappen = Math.round(n * 100) % 100 !== 0;
+  const fest = n.toFixed(hatRappen ? 2 : 0);
   let [ganz, dez] = fest.split('.');
   ganz = ganz.replace(/\B(?=(\d{3})+(?!\d))/g, "'");
-  return (neg ? '-' : '') + ganz + '.' + dez;
+  return (neg ? '-' : '') + ganz + (dez ? '.' + dez : '');
 }
 
 function formatDatum(iso) {
@@ -586,6 +615,7 @@ let tabAktuell = 'uebersicht';
 let offenId = { budget: null, konten: null, investment: null, mehr: null };
 let inaktiveSichtbar = { budget: false, konten: false, investment: false, mehr: false };
 let uebersichtMonat = monatHeute();
+let dialogOffen = null; /* { entity, id } waehrend ein Neuanlage-Dialog offen ist */
 
 function clampMonat(m) { return m < dok.einstellungen.startmonat ? dok.einstellungen.startmonat : m; }
 
@@ -631,8 +661,7 @@ function neuerBudgetposten(gruppeVorschlag) {
     gueltigAb: dok.einstellungen.startmonat, gueltigBis: null, aktiv: true
   };
   dok.budgetposten.push(posten);
-  offenId.budget = posten.id;
-  sichern(); renderAktuellerTab();
+  sichern(); dialogOeffnen('budgetposten', posten.id);
 }
 
 function neueEinnahme() {
@@ -641,15 +670,13 @@ function neueEinnahme() {
     rhythmus: 'monatlich', faelligMonate: [], gueltigAb: dok.einstellungen.startmonat, gueltigBis: null, aktiv: true
   };
   dok.einnahmen.push(e);
-  offenId.budget = e.id;
-  sichern(); renderAktuellerTab();
+  sichern(); dialogOeffnen('einnahme', e.id);
 }
 
 function neuesKonto() {
   const k = { id: neueId(), name: '', typ: 'giro', waehrung: 'CHF', inhaber: dok.personen[0].id, aktiv: true };
   dok.konten.push(k);
-  offenId.konten = k.id;
-  sichern(); renderAktuellerTab();
+  sichern(); dialogOeffnen('konto', k.id);
 }
 
 function neuesInvestment() {
@@ -658,15 +685,13 @@ function neuesInvestment() {
     startkapital: 0, startdatum: heutedatum(), monatlicheEinzahlung: 0, renditeErwartetProJahr: 0, aktiv: true
   };
   dok.investments.push(i);
-  offenId.investment = i.id;
-  sichern(); renderAktuellerTab();
+  sichern(); dialogOeffnen('investment', i.id);
 }
 
 function neuerTopf() {
   const t = { id: neueId(), name: '', sockel: 0, aktiv: true, verteilschluessel: { art: 'haelftig', anteile: {}, bestaetigtAm: null } };
   dok.toepfe.push(t);
-  offenId.mehr = t.id;
-  sichern(); renderAktuellerTab();
+  sichern(); dialogOeffnen('topf', t.id);
 }
 
 /* ---------- Aendern / Deaktivieren / Aufraeumen ---------- */
@@ -700,26 +725,58 @@ function monatTogglen(entity, id, m) {
   sichern(); renderAktuellerTab();
 }
 
-function aufraeumenUndSchliessen(entity, id) {
-  const obj = findeObjekt(entity, id);
-  if (obj && istLeer(entity, obj)) {
-    if (entity === 'budgetposten') {
-      const kategorieId = obj.kategorieId;
-      const arr = dok.budgetposten;
-      arr.splice(arr.findIndex((x) => x.id === id), 1);
+/* Inline "Fertig" bei einem bestehenden Eintrag: schliesst nur die Ansicht.
+   Kein hartes Loeschen etablierter Daten (CLAUDE.md Regel 5) — dafuer gibt
+   es "Deaktivieren". */
+function schliessen(entity, id) {
+  offenId[tabAktuell] = null;
+  renderAktuellerTab();
+}
+
+/* Entfernt einen Eintrag bedingungslos aus dem Dokument. Nur zulaessig fuer
+   einen Eintrag, der gerade erst im Dialog angelegt und nie bestaetigt
+   wurde (siehe verwerfen/dialogUebernehmen) — kein Verstoss gegen das
+   Verbot des harten Loeschens etablierter Daten. */
+function hartEntfernen(entity, id) {
+  if (entity === 'budgetposten') {
+    const posten = findeObjekt('budgetposten', id);
+    const kategorieId = posten && posten.kategorieId;
+    const arr = dok.budgetposten;
+    const idx = arr.findIndex((x) => x.id === id);
+    if (idx > -1) arr.splice(idx, 1);
+    if (kategorieId) {
       const nochVerwendet = dok.budgetposten.some((p) => p.kategorieId === kategorieId);
       if (!nochVerwendet) {
         const ki = dok.kategorien.findIndex((k) => k.id === kategorieId);
         if (ki > -1) dok.kategorien.splice(ki, 1);
       }
-    } else {
-      const arr = arrayFuer(entity);
-      const idx = arr.findIndex((x) => x.id === id);
-      if (idx > -1) arr.splice(idx, 1);
     }
+  } else {
+    const arr = arrayFuer(entity);
+    const idx = arr.findIndex((x) => x.id === id);
+    if (idx > -1) arr.splice(idx, 1);
   }
-  offenId[tabAktuell] = null;
-  sichern(); renderAktuellerTab();
+}
+
+/* Dialog fuer Neuanlagen: "Verwerfen" entfernt den nie bestaetigten Eintrag
+   immer, unabhaengig davon, was schon eingetippt wurde. */
+function verwerfen(entity, id) {
+  hartEntfernen(entity, id);
+  dialogSchliessen();
+}
+
+/* Dialog fuer Neuanlagen: "Uebernehmen" behaelt den Eintrag, ausser die
+   Bezeichnung wurde nie ausgefuellt — dann war nichts zu bestaetigen. */
+function dialogUebernehmen(entity, id) {
+  const obj = findeObjekt(entity, id);
+  if (obj && istLeer(entity, obj)) hartEntfernen(entity, id);
+  dialogSchliessen();
+}
+
+function dialogSchliessen() {
+  dialogOffen = null;
+  document.body.style.overflow = '';
+  renderDialog(); sichern(); renderAktuellerTab();
 }
 
 /* ---------- Bausteine fuer HTML ---------- */
@@ -772,6 +829,15 @@ function traegerOptionsHTML(aktuellerWert) {
   return html + '</optgroup>';
 }
 
+function infoKnopfHTML(id) {
+  return '<button type="button" class="info-knopf" data-action="info-umschalten" data-id="' + id +
+    '" aria-label="Erklärung anzeigen">ⓘ</button>';
+}
+
+function infoTextHTML(id, text) {
+  return '<p class="note info-text" id="info-' + id + '" hidden>' + escapeHtml(text) + '</p>';
+}
+
 function zeileHTML(label, betrag, betont) {
   return '<div class="row"><div class="name"><b>' + escapeHtml(label) + '</b></div><div class="mark' +
     (betont ? ' ok' : '') + '">' + formatCHF(betrag) + '</div></div>';
@@ -796,7 +862,7 @@ function einnahmeZeileHTML(e) {
     '<div class="item-kopf" data-action="oeffnen" data-entity="einnahme" data-id="' + e.id + '">' +
     '<span class="chev">›</span><div class="haupt"><b>' + name + '</b><span>' + sub + '</span></div>' +
     '<div class="betrag">' + formatCHF(e.betrag) + '</div></div>' +
-    (offen ? einnahmeFormHTML(e) : '') + '</div>';
+    (offen ? einnahmeFormHTML(e) + formAktionenHTML('einnahme', e) : '') + '</div>';
 }
 
 function einnahmeFormHTML(e) {
@@ -813,7 +879,6 @@ function einnahmeFormHTML(e) {
       feldHTML('Gültig ab', 'month', 'einnahme', e.id, 'gueltigAb', e.gueltigAb) +
       feldHTML('Gültig bis', 'month', 'einnahme', e.id, 'gueltigBis', e.gueltigBis || '') +
     '</div>' +
-    formAktionenHTML('einnahme', e) +
     '</div>';
 }
 
@@ -826,7 +891,7 @@ function postenZeileHTML(p) {
     '<div class="item-kopf" data-action="oeffnen" data-entity="budgetposten" data-id="' + p.id + '">' +
     '<span class="chev">›</span><div class="haupt"><b><span class="badge badge-' + p.kostenart + '">' + p.kostenart +
     '</span>' + name + '</b><span>' + sub + '</span></div><div class="betrag">' + formatCHF(p.betrag) + '</div></div>' +
-    (offen ? postenFormHTML(p, k) : '') + '</div>';
+    (offen ? postenFormHTML(p, k) + formAktionenHTML('budgetposten', p) : '') + '</div>';
 }
 
 function postenFormHTML(p, k) {
@@ -846,7 +911,6 @@ function postenFormHTML(p, k) {
       feldHTML('Gültig ab', 'month', 'budgetposten', p.id, 'gueltigAb', p.gueltigAb) +
       feldHTML('Gültig bis', 'month', 'budgetposten', p.id, 'gueltigBis', p.gueltigBis || '') +
     '</div>' +
-    formAktionenHTML('budgetposten', p) +
     '</div>';
 }
 
@@ -898,19 +962,24 @@ function kontoZeileHTML(k) {
   return '<div class="item' + (offen ? ' offen' : '') + (k.aktiv ? '' : ' inaktiv') + '">' +
     '<div class="item-kopf" data-action="oeffnen" data-entity="konto" data-id="' + k.id + '">' +
     '<span class="chev">›</span><div class="haupt"><b>' + name + '</b><span>' + sub + '</span></div></div>' +
-    (offen ? kontoFormHTML(k) : '') + '</div>';
+    (offen ? kontoFormHTML(k) + formAktionenHTML('konto', k) : '') + '</div>';
 }
 
 function kontoFormHTML(k) {
   return '<div class="editform">' +
     feldHTML('Bezeichnung', 'text', 'konto', k.id, 'name', k.name) +
     '<div class="feldzeile">' +
-      auswahlHTML('Typ', 'konto', k.id, 'typ', k.typ,
-        [['giro', 'Giro'], ['spar', 'Spar'], ['bargeld', 'Bargeld'], ['fremdwaehrung', 'Fremdwährung']]) +
+      '<div class="feld"><label>Typ' + infoKnopfHTML('kontotyp-' + k.id) + '</label>' +
+        '<select data-entity="konto" data-id="' + k.id + '" data-feld="typ">' +
+        [['giro', 'Giro'], ['spar', 'Spar'], ['bargeld', 'Bargeld'], ['fremdwaehrung', 'Fremdwährung']]
+          .map(([v, l]) => '<option value="' + v + '"' + (v === k.typ ? ' selected' : '') + '>' + escapeHtml(l) + '</option>').join('') +
+        '</select>' +
+        infoTextHTML('kontotyp-' + k.id, 'Giro: laufendes Konto für den Alltag · Spar: Spareinlage · ' +
+          'Bargeld: Bargeldbestand · Fremdwährung: Konto in einer anderen Währung als CHF') +
+      '</div>' +
       feldHTML('Währung', 'text', 'konto', k.id, 'waehrung', k.waehrung) +
     '</div>' +
     auswahlHTML('Inhaber', 'konto', k.id, 'inhaber', k.inhaber, null, traegerOptionsHTML(k.inhaber)) +
-    formAktionenHTML('konto', k) +
     '</div>';
 }
 
@@ -930,7 +999,7 @@ function investmentZeileHTML(i) {
   return '<div class="item' + (offen ? ' offen' : '') + (i.aktiv ? '' : ' inaktiv') + '">' +
     '<div class="item-kopf" data-action="oeffnen" data-entity="investment" data-id="' + i.id + '">' +
     '<span class="chev">›</span><div class="haupt"><b>' + name + '</b><span>' + sub + '</span></div></div>' +
-    (offen ? investmentFormHTML(i) : '') + '</div>';
+    (offen ? investmentFormHTML(i) + formAktionenHTML('investment', i) : '') + '</div>';
 }
 
 function investmentFormHTML(i) {
@@ -938,8 +1007,14 @@ function investmentFormHTML(i) {
     feldHTML('Bezeichnung', 'text', 'investment', i.id, 'name', i.name) +
     feldHTML('Anbieter', 'text', 'investment', i.id, 'anbieter', i.anbieter) +
     '<div class="feldzeile">' +
-      auswahlHTML('Typ', 'investment', i.id, 'typ', i.typ,
-        [['saeule3a', 'Säule 3a'], ['fonds', 'Fonds'], ['depot', 'Depot'], ['krypto', 'Krypto']]) +
+      '<div class="feld"><label>Typ' + infoKnopfHTML('investmenttyp-' + i.id) + '</label>' +
+        '<select data-entity="investment" data-id="' + i.id + '" data-feld="typ">' +
+        [['saeule3a', 'Säule 3a'], ['fonds', 'Fonds'], ['depot', 'Depot'], ['krypto', 'Krypto']]
+          .map(([v, l]) => '<option value="' + v + '"' + (v === i.typ ? ' selected' : '') + '>' + escapeHtml(l) + '</option>').join('') +
+        '</select>' +
+        infoTextHTML('investmenttyp-' + i.id, 'Säule 3a: gebundene Vorsorge · Fonds: Anteile an einem ' +
+          'Anlagefonds · Depot: freies Wertschriftendepot · Krypto: Kryptowährungen') +
+      '</div>' +
       auswahlHTML('Inhaber', 'investment', i.id, 'inhaber', i.inhaber, dok.personen.map((p) => [p.id, personName(p.id)])) +
     '</div>' +
     '<div class="feldzeile">' +
@@ -951,7 +1026,6 @@ function investmentFormHTML(i) {
       feldHTML('Erwartete Rendite p.a. (%)', 'number', 'investment', i.id, 'renditeErwartetProJahr', i.renditeErwartetProJahr, { step: '0.1' }) +
     '</div>' +
     feldHTML('Währung', 'text', 'investment', i.id, 'waehrung', i.waehrung) +
-    formAktionenHTML('investment', i) +
     '</div>';
 }
 
@@ -984,7 +1058,7 @@ function topfZeileHTML(t) {
     '<div class="item-kopf" data-action="oeffnen" data-entity="topf" data-id="' + t.id + '">' +
     '<span class="chev">›</span><div class="haupt"><b>' + name + '</b><span>' + sub + '</span></div>' +
     '<div class="betrag">Sockel ' + formatCHF(t.sockel) + '</div></div>' +
-    (offen ? topfFormHTML(t) : '') + '</div>';
+    (offen ? topfFormHTML(t) + formAktionenHTML('topf', t) : '') + '</div>';
 }
 
 function topfFormHTML(t) {
@@ -1008,7 +1082,6 @@ function topfFormHTML(t) {
     auswahlHTML('Verteilschlüssel', 'topf', t.id, 'verteilschluessel.art', t.verteilschluessel.art,
       [['nachEinkommen', 'Nach Einkommensanteil'], ['haelftig', 'Hälftig'], ['frei', 'Frei']]) +
     zusatz +
-    formAktionenHTML('topf', t) +
     '</div>';
 }
 
@@ -1125,7 +1198,7 @@ function renderSicherungStatus() {
 function sicherungTeilen() {
   const datei = sicherungsdatei();
   if (!(navigator.canShare && navigator.canShare({ files: [datei] }))) {
-    log('Teilen von Dateien wird hier nicht unterstützt. „Herunterladen“ verwenden.');
+    log('Teilen von Dateien wird hier nicht unterstützt. „Speichern“ verwenden.');
     return;
   }
   navigator.share({ files: [datei], title: datei.name })
@@ -1141,7 +1214,7 @@ function sicherungHerunterladen() {
   document.body.appendChild(a); a.click(); a.remove();
   setTimeout(() => URL.revokeObjectURL(url), 4000);
   dok.letzteSicherung = new Date().toISOString(); sichern(); renderSicherungStatus();
-  log('Download ausgelöst: ' + datei.name);
+  log('Gespeichert: ' + datei.name);
 }
 
 function sicherungKopieren() {
@@ -1153,6 +1226,41 @@ function sicherungKopieren() {
   } else {
     log('Zwischenablage nicht verfügbar.');
   }
+}
+
+/* ---------- Dialog fuer Neuanlagen ---------- */
+
+const DIALOG_TITEL = {
+  budgetposten: 'Neuer Posten', einnahme: 'Neue Einnahme', konto: 'Neues Konto',
+  investment: 'Neues Investment', topf: 'Neuer Topf'
+};
+
+function dialogOeffnen(entity, id) {
+  dialogOffen = { entity, id };
+  document.body.style.overflow = 'hidden';
+  renderDialog();
+}
+
+function renderDialog() {
+  const overlay = $('dialog-overlay');
+  if (!dialogOffen) { overlay.classList.remove('offen'); return; }
+  const { entity, id } = dialogOffen;
+  const obj = findeObjekt(entity, id);
+  if (!obj) { dialogOffen = null; overlay.classList.remove('offen'); return; }
+  let inhalt;
+  if (entity === 'budgetposten') inhalt = postenFormHTML(obj, dok.kategorien.find((x) => x.id === obj.kategorieId) || { name: '', gruppe: '' });
+  else if (entity === 'einnahme') inhalt = einnahmeFormHTML(obj);
+  else if (entity === 'konto') inhalt = kontoFormHTML(obj);
+  else if (entity === 'investment') inhalt = investmentFormHTML(obj);
+  else if (entity === 'topf') inhalt = topfFormHTML(obj);
+  $('dialog-box').innerHTML =
+    '<div class="dialog-kopf"><h3>' + DIALOG_TITEL[entity] + '</h3>' +
+      '<button type="button" class="dialog-schliessen" data-action="dialog-verwerfen" data-entity="' + entity +
+      '" data-id="' + id + '" aria-label="Verwerfen">&times;</button></div>' +
+    '<div class="dialog-inhalt">' + inhalt + '</div>' +
+    '<div class="dialog-fuss"><button type="button" data-action="dialog-uebernehmen" data-entity="' + entity +
+      '" data-id="' + id + '">Übernehmen</button></div>';
+  overlay.classList.add('offen');
 }
 
 /* ---------- Rendersteuerung ---------- */
@@ -1196,7 +1304,7 @@ function behandeln(action, el) {
   switch (action) {
     case 'tab': tabWechseln(d.tab); break;
     case 'oeffnen': offenId[tabAktuell] = (offenId[tabAktuell] === d.id ? null : d.id); renderAktuellerTab(); break;
-    case 'schliessen': aufraeumenUndSchliessen(d.entity, d.id); break;
+    case 'schliessen': schliessen(d.entity, d.id); break;
     case 'deaktivieren': setzeAktiv(d.entity, d.id, false); break;
     case 'reaktivieren': setzeAktiv(d.entity, d.id, true); break;
     case 'inaktive-umschalten': inaktiveSichtbar[d.tab] = !inaktiveSichtbar[d.tab]; renderAktuellerTab(); break;
@@ -1205,6 +1313,9 @@ function behandeln(action, el) {
     case 'konto-neu': neuesKonto(); break;
     case 'investment-neu': neuesInvestment(); break;
     case 'topf-neu': neuerTopf(); break;
+    case 'dialog-verwerfen': verwerfen(d.entity, d.id); break;
+    case 'dialog-uebernehmen': dialogUebernehmen(d.entity, d.id); break;
+    case 'info-umschalten': { const el = $('info-' + d.id); if (el) el.hidden = !el.hidden; break; }
     case 'monat-toggle': monatTogglen(d.entity, d.id, Number(d.monat)); break;
     case 'monat-zurueck': monatWechseln(-1); break;
     case 'monat-vor': monatWechseln(1); break;
@@ -1215,6 +1326,7 @@ function behandeln(action, el) {
 }
 
 document.addEventListener('click', (e) => {
+  if (e.target.id === 'dialog-overlay' && dialogOffen) { verwerfen(dialogOffen.entity, dialogOffen.id); return; }
   const el = e.target.closest('[data-action]');
   if (el) behandeln(el.dataset.action, el);
 });
@@ -1247,6 +1359,7 @@ $('sicherung-datei').addEventListener('change', (e) => {
       if (!roh || typeof roh !== 'object') throw new Error('Unerwarteter Inhalt');
       dok = migrieren(roh);
       offenId = { budget: null, konten: null, investment: null, mehr: null };
+      dialogOffen = null; document.body.style.overflow = ''; renderDialog();
       uebersichtMonat = clampMonat(monatHeute());
       renderAlles(); sichern();
       log('Sicherung geladen: ' + f.name);
