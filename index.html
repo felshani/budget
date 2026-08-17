@@ -102,7 +102,6 @@ input[type=text],input[type=number],input[type=month],input[type=date],select{
 select{font-family:var(--sans);-webkit-appearance:none;appearance:none}
 .info-knopf{background:transparent;border:0;color:var(--ink-soft);font-size:13px;
   padding:0 0 0 4px;cursor:pointer;vertical-align:1px}
-.info-text{margin-top:6px}
 input:focus-visible,button:focus-visible,select:focus-visible{outline:2px solid var(--ok);outline-offset:2px}
 
 .monatsraster{display:grid;grid-template-columns:repeat(6,1fr);gap:6px}
@@ -179,25 +178,35 @@ nav.tabbar button .ic{font-size:19px;line-height:1}
 nav.tabbar button.active{color:var(--ok)}
 nav.tabbar button:active{opacity:.7}
 
-/* Dialog fuer Neuanlagen */
+/* Neuanlage-Dialog: vollflaechig, kein Hintergrund sichtbar */
 .dialog-overlay{
-  position:fixed;inset:0;background:rgba(0,0,0,.5);display:none;
-  align-items:center;justify-content:center;
-  padding:max(20px,env(safe-area-inset-top)) 20px max(20px,env(safe-area-inset-bottom));z-index:50;
+  position:fixed;inset:0;background:var(--paper);display:none;
+  flex-direction:column;z-index:50;
 }
 .dialog-overlay.offen{display:flex}
-.dialog-box{
-  background:var(--card);border-radius:14px;max-width:440px;width:100%;
-  max-height:85vh;display:flex;flex-direction:column;overflow:hidden;
-}
+.dialog-box{background:var(--paper);width:100%;height:100%;display:flex;flex-direction:column;overflow:hidden}
 .dialog-kopf{display:flex;align-items:center;justify-content:space-between;
-  padding:14px 16px;border-bottom:1px solid var(--rule)}
+  padding:max(14px,env(safe-area-inset-top)) 16px 14px;border-bottom:1px solid var(--rule)}
 .dialog-kopf h3{margin:0;font-size:15px;font-weight:650}
 .dialog-schliessen{background:transparent;border:0;color:var(--ink-soft);
   font-size:22px;line-height:1;padding:4px 8px;border-radius:8px}
 .dialog-inhalt{padding:16px;overflow-y:auto;flex:1;min-width:0}
-.dialog-fuss{padding:12px 16px;border-top:1px solid var(--rule)}
+.dialog-fuss{padding:12px 16px max(12px,env(safe-area-inset-bottom));border-top:1px solid var(--rule)}
 .dialog-fuss button{width:100%}
+
+/* Info-Fenster: klein, zentriert, mit abgedunkeltem Hintergrund — legt
+   sich noetigenfalls auch ueber den vollflaechigen Neuanlage-Dialog */
+.info-overlay{
+  position:fixed;inset:0;background:rgba(0,0,0,.5);display:none;
+  align-items:center;justify-content:center;padding:20px;z-index:60;
+}
+.info-overlay.offen{display:flex}
+.info-box{background:var(--card);border-radius:14px;max-width:340px;width:100%;
+  padding:18px;display:flex;flex-direction:column;gap:14px}
+.info-box p{margin:0;font-size:14px;line-height:1.5}
+
+.monatjahr{display:flex;gap:8px;min-width:0}
+.monatjahr select{flex:1;min-width:0}
 </style>
 </head>
 <body>
@@ -302,7 +311,7 @@ nav.tabbar button:active{opacity:.7}
 
       <section class="plain">
         <h2>Startmonat</h2>
-        <input type="month" id="feld-startmonat">
+        <div id="startmonat-feld"></div>
         <p class="note" style="margin-top:8px">Ab diesem Monat rechnet die App. Frühere Monate werden nicht ausgewertet.</p>
       </section>
 
@@ -367,6 +376,10 @@ nav.tabbar button:active{opacity:.7}
 
   <div class="dialog-overlay" id="dialog-overlay">
     <div class="dialog-box" id="dialog-box"></div>
+  </div>
+
+  <div class="info-overlay" id="info-overlay">
+    <div class="info-box" id="info-box"></div>
   </div>
 </div>
 
@@ -629,6 +642,7 @@ function arrayFuer(entity) {
 }
 
 function findeObjekt(entity, id) {
+  if (entity === 'einstellungen') return dok.einstellungen;
   const arr = arrayFuer(entity);
   return arr && arr.find((x) => x.id === id);
 }
@@ -798,6 +812,50 @@ function auswahlHTML(label, entity, id, feld, wert, paare, rohHtml) {
     '" data-feld="' + feld + '">' + opts + '</select></div>';
 }
 
+/* Ersetzt <input type=month> — auf iOS Safari respektiert das native Feld
+   width/max-width nicht zuverlaessig (feste innere Mindestbreite). Zwei
+   <select>-Felder haben diese Eigenheit nicht. */
+function jahrBereich(mitte) {
+  const heute = new Date().getFullYear();
+  let von = heute - 5, bis = heute + 10;
+  if (mitte && Number(mitte) < von) von = Number(mitte);
+  if (mitte && Number(mitte) > bis) bis = Number(mitte);
+  return [von, bis];
+}
+
+function monatJahrFeldHTML(label, entity, id, feld, wert, erlaubtLeer) {
+  const [jahrWert, monatWert] = wert ? wert.split('-') : ['', ''];
+  const [von, bis] = jahrBereich(jahrWert);
+  let monatOpts = erlaubtLeer ? '<option value="">–</option>' : '';
+  for (let m = 1; m <= 12; m++) {
+    const mm = String(m).padStart(2, '0');
+    monatOpts += '<option value="' + mm + '"' + (mm === monatWert ? ' selected' : '') + '>' + MONATSNAMEN[m - 1] + '</option>';
+  }
+  let jahrOpts = erlaubtLeer ? '<option value="">–</option>' : '';
+  for (let j = von; j <= bis; j++) {
+    jahrOpts += '<option value="' + j + '"' + (String(j) === jahrWert ? ' selected' : '') + '>' + j + '</option>';
+  }
+  return '<div class="feld">' + (label ? '<label>' + label + '</label>' : '') + '<div class="monatjahr">' +
+    '<select data-entity="' + entity + '" data-id="' + id + '" data-monatfeld="' + feld + '" data-teil="monat">' + monatOpts + '</select>' +
+    '<select data-entity="' + entity + '" data-id="' + id + '" data-monatfeld="' + feld + '" data-teil="jahr">' + jahrOpts + '</select>' +
+    '</div></div>';
+}
+
+function monatJahrGeaendert(el) {
+  const { entity, id, monatfeld } = el.dataset;
+  const obj = findeObjekt(entity, id);
+  if (!obj) return;
+  const c = el.closest('.monatjahr');
+  const m = c.querySelector('[data-teil="monat"]').value;
+  const j = c.querySelector('[data-teil="jahr"]').value;
+  setzeFeld(obj, monatfeld, (m && j) ? (j + '-' + m) : '');
+  sichern();
+  if (entity === 'einstellungen') {
+    if (uebersichtMonat < dok.einstellungen.startmonat) uebersichtMonat = dok.einstellungen.startmonat;
+    renderAlles();
+  }
+}
+
 function monatsRasterHTML(entity, id, ausgewaehlt) {
   ausgewaehlt = ausgewaehlt || [];
   let html = '<div class="monatsraster">';
@@ -829,13 +887,19 @@ function traegerOptionsHTML(aktuellerWert) {
   return html + '</optgroup>';
 }
 
-function infoKnopfHTML(id) {
-  return '<button type="button" class="info-knopf" data-action="info-umschalten" data-id="' + id +
+function infoKnopfHTML(text) {
+  return '<button type="button" class="info-knopf" data-action="info-oeffnen" data-text="' + escapeHtml(text) +
     '" aria-label="Erklärung anzeigen">ⓘ</button>';
 }
 
-function infoTextHTML(id, text) {
-  return '<p class="note info-text" id="info-' + id + '" hidden>' + escapeHtml(text) + '</p>';
+function infoOeffnen(text) {
+  $('info-box').innerHTML = '<p>' + escapeHtml(text) + '</p>' +
+    '<button type="button" data-action="info-schliessen">Schliessen</button>';
+  $('info-overlay').classList.add('offen');
+}
+
+function infoSchliessen() {
+  $('info-overlay').classList.remove('offen');
 }
 
 function zeileHTML(label, betrag, betont) {
@@ -875,10 +939,8 @@ function einnahmeFormHTML(e) {
     auswahlHTML('Rhythmus', 'einnahme', e.id, 'rhythmus', e.rhythmus, RHYTHMEN) +
     '<div class="feld"><label>Fälligkeitsmonate</label>' + monatsRasterHTML('einnahme', e.id, e.faelligMonate) +
       '<p class="note" style="margin-top:8px">Bei «monatlich» ohne Bedeutung.</p></div>' +
-    '<div class="feldzeile">' +
-      feldHTML('Gültig ab', 'month', 'einnahme', e.id, 'gueltigAb', e.gueltigAb) +
-      feldHTML('Gültig bis', 'month', 'einnahme', e.id, 'gueltigBis', e.gueltigBis || '') +
-    '</div>' +
+    monatJahrFeldHTML('Gültig ab', 'einnahme', e.id, 'gueltigAb', e.gueltigAb, false) +
+    monatJahrFeldHTML('Gültig bis', 'einnahme', e.id, 'gueltigBis', e.gueltigBis, true) +
     '</div>';
 }
 
@@ -907,10 +969,8 @@ function postenFormHTML(p, k) {
     auswahlHTML('Rhythmus', 'budgetposten', p.id, 'rhythmus', p.rhythmus, RHYTHMEN) +
     '<div class="feld"><label>Fälligkeitsmonate</label>' + monatsRasterHTML('budgetposten', p.id, p.faelligMonate) +
       '<p class="note" style="margin-top:8px">Bei «monatlich» ohne Bedeutung. Sonst: Monat der tatsächlichen Zahlung.</p></div>' +
-    '<div class="feldzeile">' +
-      feldHTML('Gültig ab', 'month', 'budgetposten', p.id, 'gueltigAb', p.gueltigAb) +
-      feldHTML('Gültig bis', 'month', 'budgetposten', p.id, 'gueltigBis', p.gueltigBis || '') +
-    '</div>' +
+    monatJahrFeldHTML('Gültig ab', 'budgetposten', p.id, 'gueltigAb', p.gueltigAb, false) +
+    monatJahrFeldHTML('Gültig bis', 'budgetposten', p.id, 'gueltigBis', p.gueltigBis, true) +
     '</div>';
 }
 
@@ -969,13 +1029,12 @@ function kontoFormHTML(k) {
   return '<div class="editform">' +
     feldHTML('Bezeichnung', 'text', 'konto', k.id, 'name', k.name) +
     '<div class="feldzeile">' +
-      '<div class="feld"><label>Typ' + infoKnopfHTML('kontotyp-' + k.id) + '</label>' +
+      '<div class="feld"><label>Typ' + infoKnopfHTML('Giro: laufendes Konto für den Alltag · Spar: Spareinlage · ' +
+          'Bargeld: Bargeldbestand · Fremdwährung: Konto in einer anderen Währung als CHF') + '</label>' +
         '<select data-entity="konto" data-id="' + k.id + '" data-feld="typ">' +
         [['giro', 'Giro'], ['spar', 'Spar'], ['bargeld', 'Bargeld'], ['fremdwaehrung', 'Fremdwährung']]
           .map(([v, l]) => '<option value="' + v + '"' + (v === k.typ ? ' selected' : '') + '>' + escapeHtml(l) + '</option>').join('') +
         '</select>' +
-        infoTextHTML('kontotyp-' + k.id, 'Giro: laufendes Konto für den Alltag · Spar: Spareinlage · ' +
-          'Bargeld: Bargeldbestand · Fremdwährung: Konto in einer anderen Währung als CHF') +
       '</div>' +
       feldHTML('Währung', 'text', 'konto', k.id, 'waehrung', k.waehrung) +
     '</div>' +
@@ -1007,13 +1066,12 @@ function investmentFormHTML(i) {
     feldHTML('Bezeichnung', 'text', 'investment', i.id, 'name', i.name) +
     feldHTML('Anbieter', 'text', 'investment', i.id, 'anbieter', i.anbieter) +
     '<div class="feldzeile">' +
-      '<div class="feld"><label>Typ' + infoKnopfHTML('investmenttyp-' + i.id) + '</label>' +
+      '<div class="feld"><label>Typ' + infoKnopfHTML('Säule 3a: gebundene Vorsorge · Fonds: Anteile an einem ' +
+          'Anlagefonds · Depot: freies Wertschriftendepot · Krypto: Kryptowährungen') + '</label>' +
         '<select data-entity="investment" data-id="' + i.id + '" data-feld="typ">' +
         [['saeule3a', 'Säule 3a'], ['fonds', 'Fonds'], ['depot', 'Depot'], ['krypto', 'Krypto']]
           .map(([v, l]) => '<option value="' + v + '"' + (v === i.typ ? ' selected' : '') + '>' + escapeHtml(l) + '</option>').join('') +
         '</select>' +
-        infoTextHTML('investmenttyp-' + i.id, 'Säule 3a: gebundene Vorsorge · Fonds: Anteile an einem ' +
-          'Anlagefonds · Depot: freies Wertschriftendepot · Krypto: Kryptowährungen') +
       '</div>' +
       auswahlHTML('Inhaber', 'investment', i.id, 'inhaber', i.inhaber, dok.personen.map((p) => [p.id, personName(p.id)])) +
     '</div>' +
@@ -1096,8 +1154,7 @@ function renderMehr() {
   const toepfeListe = dok.toepfe.filter((t) => inaktiveSichtbar.mehr || t.aktiv);
   $('liste-toepfe').innerHTML = toepfeListe.length ? toepfeListe.map(topfZeileHTML).join('') : '<p class="leer">Noch keine Töpfe.</p>';
 
-  const sm = $('feld-startmonat');
-  if (sm && sm !== document.activeElement) sm.value = dok.einstellungen.startmonat;
+  $('startmonat-feld').innerHTML = monatJahrFeldHTML('', 'einstellungen', '_', 'startmonat', dok.einstellungen.startmonat, false);
 
   renderSicherungStatus();
 
@@ -1315,7 +1372,8 @@ function behandeln(action, el) {
     case 'topf-neu': neuerTopf(); break;
     case 'dialog-verwerfen': verwerfen(d.entity, d.id); break;
     case 'dialog-uebernehmen': dialogUebernehmen(d.entity, d.id); break;
-    case 'info-umschalten': { const el = $('info-' + d.id); if (el) el.hidden = !el.hidden; break; }
+    case 'info-oeffnen': infoOeffnen(d.text); break;
+    case 'info-schliessen': infoSchliessen(); break;
     case 'monat-toggle': monatTogglen(d.entity, d.id, Number(d.monat)); break;
     case 'monat-zurueck': monatWechseln(-1); break;
     case 'monat-vor': monatWechseln(1); break;
@@ -1326,7 +1384,7 @@ function behandeln(action, el) {
 }
 
 document.addEventListener('click', (e) => {
-  if (e.target.id === 'dialog-overlay' && dialogOffen) { verwerfen(dialogOffen.entity, dialogOffen.id); return; }
+  if (e.target.id === 'info-overlay') { infoSchliessen(); return; }
   const el = e.target.closest('[data-action]');
   if (el) behandeln(el.dataset.action, el);
 });
@@ -1337,16 +1395,12 @@ document.addEventListener('input', (e) => {
 });
 
 document.addEventListener('change', (e) => {
+  const mEl = e.target.closest('[data-monatfeld]');
+  if (mEl) { monatJahrGeaendert(mEl); return; }
   const el = e.target.closest('[data-feld]');
   if (!el) return;
   if (el.tagName === 'SELECT' || el.type === 'month' || el.type === 'date') feldGeaendert(el, true);
   else if (el.tagName === 'INPUT') feldGeaendert(el, false);
-});
-
-$('feld-startmonat').addEventListener('change', (e) => {
-  dok.einstellungen.startmonat = e.target.value;
-  if (uebersichtMonat < dok.einstellungen.startmonat) uebersichtMonat = dok.einstellungen.startmonat;
-  sichern(); renderAlles();
 });
 
 $('sicherung-datei').addEventListener('change', (e) => {
