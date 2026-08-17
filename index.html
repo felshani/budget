@@ -19,14 +19,13 @@
   --rule:#C9D2CC;
   --stamp:#B33A2B;
   --ok:#1F6F5C;
-  --amber:#B98900;
   --sans:-apple-system,BlinkMacSystemFont,"Segoe UI",system-ui,sans-serif;
   --mono:ui-monospace,"SF Mono",Menlo,Consolas,monospace;
 }
 @media (prefers-color-scheme:dark){
   :root{
     --paper:#131917; --card:#1B2321; --ink:#E4EAE6; --ink-soft:#8FA098;
-    --rule:#2E3A36; --stamp:#E2705C; --ok:#57C4A5; --amber:#E0B84C;
+    --rule:#2E3A36; --stamp:#E2705C; --ok:#57C4A5;
   }
 }
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
@@ -54,7 +53,7 @@ main{display:block;padding-bottom:96px}
 
 section{
   background:var(--card);border:1px solid var(--rule);border-radius:12px;
-  padding:16px 16px 4px;margin-bottom:16px;
+  padding:16px 16px 4px;margin-bottom:24px;
 }
 section.plain{padding-bottom:16px}
 h2{font-size:12px;letter-spacing:.09em;text-transform:uppercase;color:var(--ink-soft);
@@ -72,8 +71,7 @@ h2{font-size:12px;letter-spacing:.09em;text-transform:uppercase;color:var(--ink-
 .item{border-bottom:1px solid var(--rule)}
 .item:last-child{border-bottom:0}
 .item-kopf{display:flex;align-items:center;gap:10px;padding:12px 0;cursor:pointer}
-.item-kopf .chev{color:var(--ink-soft);font-size:13px;transition:transform .15s;flex:0 0 auto}
-.item.offen .chev{transform:rotate(90deg)}
+.item-kopf .chev{color:var(--ink-soft);font-size:13px;flex:0 0 auto}
 .item-kopf .haupt{flex:1;min-width:0}
 .item-kopf .haupt b{display:block;font-weight:550;font-size:15px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .item-kopf .haupt b i{font-style:italic;font-weight:450;color:var(--ink-soft)}
@@ -81,12 +79,6 @@ h2{font-size:12px;letter-spacing:.09em;text-transform:uppercase;color:var(--ink-
 .item-kopf .betrag{font-family:var(--mono);font-size:14px;font-variant-numeric:tabular-nums;white-space:nowrap;flex:0 0 auto}
 .item.inaktiv .haupt b,.item.inaktiv .haupt b i,.item.inaktiv .betrag{opacity:.5}
 .item.inaktiv .haupt span::after{content:" · inaktiv"}
-
-.badge{display:inline-block;font-size:10.5px;font-weight:700;letter-spacing:.03em;padding:1px 6px;
-       border-radius:5px;margin-right:6px;border:1px solid;vertical-align:1px}
-.badge-D{color:var(--ok);border-color:var(--ok)}
-.badge-R{color:var(--amber);border-color:var(--amber)}
-.badge-V{color:var(--stamp);border-color:var(--stamp)}
 
 /* Bearbeitungsformular */
 .editform{padding:2px 0 18px;display:flex;flex-direction:column;gap:12px;min-width:0}
@@ -108,8 +100,6 @@ input:focus-visible,button:focus-visible,select:focus-visible{outline:2px solid 
 .monatsraster button{padding:8px 0;font-size:12px;border-radius:7px;border:1px solid var(--rule);
   background:var(--paper);color:var(--ink);font-family:var(--sans)}
 .monatsraster button.an{background:var(--ok);border-color:var(--ok);color:var(--card);font-weight:600}
-
-.formaktionen{display:flex;justify-content:space-between;gap:10px;margin-top:2px}
 
 .note{font-size:12.5px;color:var(--ink-soft);margin:0}
 
@@ -141,13 +131,12 @@ button:active{opacity:.72}
 .personblock{margin-bottom:6px}
 .personblock:last-child{margin-bottom:0}
 
-.tabelle-wrap{overflow-x:auto;margin:0 -2px}
-.tabelle{width:100%;border-collapse:collapse;font-size:12.5px;min-width:320px}
-.tabelle th,.tabelle td{padding:8px 6px;text-align:right;border-bottom:1px solid var(--rule);white-space:nowrap}
-.tabelle th:first-child,.tabelle td:first-child{text-align:left}
-.tabelle th{color:var(--ink-soft);font-weight:600;font-size:11px;text-transform:uppercase;letter-spacing:.03em}
-.tabelle td{font-family:var(--mono);font-variant-numeric:tabular-nums}
-.tabelle tfoot td{font-weight:700;border-top:1px solid var(--ink);border-bottom:0}
+/* Groesste Kennzahl der App: nur einmal pro Screen, DESIGN.md */
+.hero{text-align:center;padding:6px 0 2px}
+.hero-label{margin:0 0 6px;font-size:13px;color:var(--ink-soft);text-transform:uppercase;letter-spacing:.05em}
+.hero-zahl{margin:0;font-size:44px;font-weight:650;font-family:var(--mono);letter-spacing:-.01em;
+  font-variant-numeric:tabular-nums;color:var(--ink)}
+.hero-sub{margin:6px 0 0;font-size:17px;color:var(--ink-soft)}
 
 .log{font-family:var(--mono);font-size:12px;line-height:1.6;color:var(--ink-soft);
   white-space:pre-wrap;word-break:break-word;margin:0;max-height:150px;overflow:auto}
@@ -174,39 +163,19 @@ nav.tabbar button{
   font-weight:600;padding:7px 2px 6px;border-radius:10px;display:flex;flex-direction:column;
   align-items:center;gap:3px;
 }
-nav.tabbar button .ic{font-size:19px;line-height:1}
+nav.tabbar button svg{width:22px;height:22px;display:block}
+nav.tabbar button .ic-outline{display:block}
+nav.tabbar button .ic-filled{display:none}
+nav.tabbar button.active .ic-outline{display:none}
+nav.tabbar button.active .ic-filled{display:block}
 nav.tabbar button.active{color:var(--ok)}
 nav.tabbar button:active{opacity:.7}
 
-/* Neuanlage-Dialog: vollflaechig, kein Hintergrund sichtbar */
-.dialog-overlay{
-  position:fixed;inset:0;background:var(--paper);display:none;
-  flex-direction:column;z-index:50;
-}
-.dialog-overlay.offen{display:flex}
-.dialog-box{background:var(--paper);width:100%;height:100%;display:flex;flex-direction:column;overflow:hidden}
-.dialog-kopf{display:flex;align-items:center;justify-content:space-between;
-  padding:max(14px,env(safe-area-inset-top)) 16px 14px;border-bottom:1px solid var(--rule)}
-.dialog-kopf h3{margin:0;font-size:15px;font-weight:650}
-.dialog-schliessen{background:transparent;border:0;color:var(--ink-soft);
-  font-size:22px;line-height:1;padding:4px 8px;border-radius:8px}
-.dialog-inhalt{padding:16px;overflow-y:auto;flex:1;min-width:0}
-.dialog-fuss{padding:12px 16px max(12px,env(safe-area-inset-bottom));border-top:1px solid var(--rule)}
-.dialog-fuss button{width:100%}
-
-@media (prefers-reduced-motion: no-preference) {
-  @keyframes dialog-rein {
-    from { transform: translateY(100%); opacity: 0; }
-    to   { transform: translateY(0);    opacity: 1; }
-  }
-  .dialog-overlay.offen .dialog-box { animation: dialog-rein .36s cubic-bezier(.32,.72,0,1) both; }
-}
-
 /* Info-Fenster: klein, zentriert, mit abgedunkeltem Hintergrund — legt
-   sich noetigenfalls auch ueber den vollflaechigen Neuanlage-Dialog */
+   sich noetigenfalls auch ueber das Bottom Sheet */
 .info-overlay{
   position:fixed;inset:0;background:rgba(0,0,0,.5);display:none;
-  align-items:center;justify-content:center;padding:20px;z-index:60;
+  align-items:center;justify-content:center;padding:20px;z-index:90;
 }
 .info-overlay.offen{display:flex}
 .info-box{background:var(--card);border-radius:14px;max-width:340px;width:100%;
@@ -217,9 +186,8 @@ nav.tabbar button:active{opacity:.7}
 .monatjahr{display:flex;gap:8px;min-width:0}
 .monatjahr select{flex:1;min-width:0}
 
-/* Bottom Sheet nach DESIGN.md — wiederverwendbare Komponente.
-   Vorerst nur fuer "Kostenstelle hinzufuegen" verwendet; der alte
-   .dialog-overlay bleibt fuer die uebrigen Screens vorerst bestehen. */
+/* Bottom Sheet nach DESIGN.md — wiederverwendbare Komponente fuer
+   Erfassen und Bearbeiten aller Entitaeten. */
 .sheet-overlay{
   position:fixed;inset:0;background:rgba(0,0,0,0);display:none;
   align-items:flex-end;justify-content:center;z-index:70;
@@ -247,6 +215,20 @@ nav.tabbar button:active{opacity:.7}
 .sheet-fuss{padding:14px 20px calc(14px + env(safe-area-inset-bottom));border-top:1px solid var(--rule);flex:0 0 auto}
 .sheet-primaer{width:100%;min-height:52px;border-radius:16px;font-size:16px;font-weight:600;
   background:var(--ok);border-color:var(--ok);color:var(--card)}
+.sheet-sekundaer{display:block;width:100%;background:transparent;border:0;
+  color:var(--ink-soft);font-size:14px;padding:12px 0 0;text-align:center}
+
+/* Kurze Bestaetigung nach dem Speichern, DESIGN.md: "keine Erfolgsseite" */
+.toast{
+  position:fixed;left:50%;bottom:calc(84px + env(safe-area-inset-bottom));
+  transform:translate(-50%,8px);background:var(--ink);color:var(--card);
+  padding:10px 18px;border-radius:12px;font-size:14px;font-weight:550;
+  opacity:0;pointer-events:none;z-index:80;white-space:nowrap;
+}
+@media (prefers-reduced-motion: no-preference){
+  .toast{transition:opacity .25s ease,transform .25s ease}
+}
+.toast.sichtbar{opacity:1;transform:translate(-50%,0)}
 </style>
 </head>
 <body>
@@ -270,13 +252,19 @@ nav.tabbar button:active{opacity:.7}
         <button type="button" data-action="monat-vor">›</button>
       </div>
 
+      <section class="hero">
+        <p class="hero-label">Geplanter Sparbetrag</p>
+        <p class="hero-zahl" id="hero-zahl"></p>
+        <p class="hero-sub">Fälligkeitssicht</p>
+      </section>
+
       <section>
         <h2>Einnahmen und Kosten</h2>
         <div id="uebersicht-brutto"></div>
       </section>
 
       <section>
-        <h2>Geplanter Sparbetrag</h2>
+        <h2>Zum Vergleich</h2>
         <div id="uebersicht-sparbetrag"></div>
       </section>
 
@@ -407,16 +395,29 @@ nav.tabbar button:active{opacity:.7}
   </datalist>
 
   <nav class="tabbar">
-    <button type="button" data-action="tab" data-tab="uebersicht" class="active"><span class="ic">📊</span>Übersicht</button>
-    <button type="button" data-action="tab" data-tab="budget"><span class="ic">🧾</span>Budget</button>
-    <button type="button" data-action="tab" data-tab="konten"><span class="ic">🏦</span>Konten</button>
-    <button type="button" data-action="tab" data-tab="investment"><span class="ic">📈</span>Investment</button>
-    <button type="button" data-action="tab" data-tab="mehr"><span class="ic">⋯</span>Mehr</button>
+    <button type="button" data-action="tab" data-tab="uebersicht" class="active">
+      <span class="ic-outline"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="13" width="4" height="7" rx="1"/><rect x="10" y="8" width="4" height="12" rx="1"/><rect x="16" y="4" width="4" height="16" rx="1"/></svg></span>
+      <span class="ic-filled"><svg viewBox="0 0 24 24" fill="currentColor"><rect x="4" y="13" width="4" height="7" rx="1"/><rect x="10" y="8" width="4" height="12" rx="1"/><rect x="16" y="4" width="4" height="16" rx="1"/></svg></span>
+      Übersicht</button>
+    <button type="button" data-action="tab" data-tab="budget">
+      <span class="ic-outline"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"><rect x="4" y="6" width="16" height="12" rx="2.5"/></svg></span>
+      <span class="ic-filled"><svg viewBox="0 0 24 24" fill="currentColor"><rect x="4" y="6" width="16" height="12" rx="2.5"/></svg></span>
+      Budget</button>
+    <button type="button" data-action="tab" data-tab="konten">
+      <span class="ic-outline"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="12" cy="12" r="8"/></svg></span>
+      <span class="ic-filled"><svg viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="12" r="8"/></svg></span>
+      Konten</button>
+    <button type="button" data-action="tab" data-tab="investment">
+      <span class="ic-outline"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"><path d="M12 4 L20 19 L4 19 Z"/></svg></span>
+      <span class="ic-filled"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 4 L20 19 L4 19 Z"/></svg></span>
+      Investment</button>
+    <button type="button" data-action="tab" data-tab="mehr">
+      <span class="ic-outline"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="6" cy="12" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="18" cy="12" r="1.6"/></svg></span>
+      <span class="ic-filled"><svg viewBox="0 0 24 24" fill="currentColor"><circle cx="6" cy="12" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="18" cy="12" r="1.6"/></svg></span>
+      Mehr</button>
   </nav>
 
-  <div class="dialog-overlay" id="dialog-overlay">
-    <div class="dialog-box" id="dialog-box"></div>
-  </div>
+  <div class="toast" id="toast"></div>
 
   <div class="info-overlay" id="info-overlay">
     <div class="info-box" id="info-box"></div>
@@ -432,6 +433,7 @@ nav.tabbar button:active{opacity:.7}
       <div class="sheet-inhalt" id="sheet-inhalt"></div>
       <div class="sheet-fuss">
         <button type="button" class="sheet-primaer" id="sheet-primaer" data-action="sheet-uebernehmen"></button>
+        <button type="button" class="sheet-sekundaer" id="sheet-sekundaer" data-action="sheet-umschalten-aktiv" hidden></button>
       </div>
     </div>
   </div>
@@ -679,10 +681,8 @@ function investmentTypName(t) { return { saeule3a: 'Säule 3a', fonds: 'Fonds', 
 /* ---------- Zustand der Oberflaeche (nicht gespeichert) ---------- */
 
 let tabAktuell = 'uebersicht';
-let offenId = { budget: null, konten: null, investment: null, mehr: null };
 let inaktiveSichtbar = { budget: false, konten: false, investment: false, mehr: false };
 let uebersichtMonat = monatHeute();
-let dialogOffen = null; /* { entity, id } waehrend ein Neuanlage-Dialog offen ist */
 
 function clampMonat(m) { return m < dok.einstellungen.startmonat ? dok.einstellungen.startmonat : m; }
 
@@ -730,7 +730,7 @@ function neuerBudgetposten(gruppeVorschlag) {
   };
   dok.budgetposten.push(posten);
   sichern();
-  sheetOeffnen('Kostenstelle hinzufügen', 'budgetposten', posten.id, postenFormHTML(posten, kat), 'Hinzufügen');
+  sheetOeffnenNeu('budgetposten', posten.id);
 }
 
 function neueEinnahme() {
@@ -739,13 +739,15 @@ function neueEinnahme() {
     rhythmus: 'monatlich', faelligMonate: [], gueltigAb: dok.einstellungen.startmonat, gueltigBis: null, aktiv: true
   };
   dok.einnahmen.push(e);
-  sichern(); dialogOeffnen('einnahme', e.id);
+  sichern();
+  sheetOeffnenNeu('einnahme', e.id);
 }
 
 function neuesKonto() {
   const k = { id: neueId(), name: '', typ: 'giro', waehrung: 'CHF', inhaber: dok.personen[0].id, aktiv: true };
   dok.konten.push(k);
-  sichern(); dialogOeffnen('konto', k.id);
+  sichern();
+  sheetOeffnenNeu('konto', k.id);
 }
 
 function neuesInvestment() {
@@ -754,13 +756,15 @@ function neuesInvestment() {
     startkapital: 0, startdatum: heutedatum(), monatlicheEinzahlung: 0, renditeErwartetProJahr: 0, aktiv: true
   };
   dok.investments.push(i);
-  sichern(); dialogOeffnen('investment', i.id);
+  sichern();
+  sheetOeffnenNeu('investment', i.id);
 }
 
 function neuerTopf() {
   const t = { id: neueId(), name: '', sockel: 0, aktiv: true, verteilschluessel: { art: 'haelftig', anteile: {}, bestaetigtAm: null } };
   dok.toepfe.push(t);
-  sichern(); dialogOeffnen('topf', t.id);
+  sichern();
+  sheetOeffnenNeu('topf', t.id);
 }
 
 /* ---------- Aendern / Deaktivieren / Aufraeumen ---------- */
@@ -794,17 +798,9 @@ function monatTogglen(entity, id, m) {
   sichern(); renderAktuellerTab();
 }
 
-/* Inline "Fertig" bei einem bestehenden Eintrag: schliesst nur die Ansicht.
-   Kein hartes Loeschen etablierter Daten (CLAUDE.md Regel 5) — dafuer gibt
-   es "Deaktivieren". */
-function schliessen(entity, id) {
-  offenId[tabAktuell] = null;
-  renderAktuellerTab();
-}
-
 /* Entfernt einen Eintrag bedingungslos aus dem Dokument. Nur zulaessig fuer
-   einen Eintrag, der gerade erst im Dialog angelegt und nie bestaetigt
-   wurde (siehe verwerfen/dialogUebernehmen) — kein Verstoss gegen das
+   einen Eintrag, der gerade erst im Sheet angelegt und nie bestaetigt
+   wurde (siehe sheetVerwerfen/sheetUebernehmen) — kein Verstoss gegen das
    Verbot des harten Loeschens etablierter Daten. */
 function hartEntfernen(entity, id) {
   if (entity === 'budgetposten') {
@@ -827,41 +823,57 @@ function hartEntfernen(entity, id) {
   }
 }
 
-/* Dialog fuer Neuanlagen: "Verwerfen" entfernt den nie bestaetigten Eintrag
-   immer, unabhaengig davon, was schon eingetippt wurde. */
-function verwerfen(entity, id) {
-  hartEntfernen(entity, id);
-  dialogSchliessen();
-}
-
-/* Dialog fuer Neuanlagen: "Uebernehmen" behaelt den Eintrag, ausser die
-   Bezeichnung wurde nie ausgefuellt — dann war nichts zu bestaetigen. */
-function dialogUebernehmen(entity, id) {
-  const obj = findeObjekt(entity, id);
-  if (obj && istLeer(entity, obj)) hartEntfernen(entity, id);
-  dialogSchliessen();
-}
-
-function dialogSchliessen() {
-  dialogOffen = null;
-  document.body.style.overflow = '';
-  renderDialog(); sichern(); renderAktuellerTab();
-}
-
 /* ---------- Bottom Sheet nach DESIGN.md (wiederverwendbar) ----------
-   Loest den vollflaechigen Dialog vorerst nur fuer "Kostenstelle
-   hinzufuegen" ab. Nutzt dieselben, unveraenderten Primitiven
-   (hartEntfernen, istLeer, findeObjekt, sichern, renderAktuellerTab). */
+   Ein Sheet fuer Erfassen UND Bearbeiten aller fuenf Entitaeten. Nutzt
+   ausschliesslich bestehende, unveraenderte Primitiven (hartEntfernen,
+   istLeer, findeObjekt, setzeAktiv, sichern, renderAktuellerTab). */
 
-let sheetOffen = null; /* { entity, id } */
+function entityFormHTML(entity, obj) {
+  if (entity === 'budgetposten') return postenFormHTML(obj, dok.kategorien.find((k) => k.id === obj.kategorieId) || { name: '', gruppe: '' });
+  if (entity === 'einnahme') return einnahmeFormHTML(obj);
+  if (entity === 'konto') return kontoFormHTML(obj);
+  if (entity === 'investment') return investmentFormHTML(obj);
+  if (entity === 'topf') return topfFormHTML(obj);
+}
+
+const SHEET_TITEL_NEU = {
+  budgetposten: 'Kostenstelle hinzufügen', einnahme: 'Einnahme hinzufügen',
+  konto: 'Konto hinzufügen', investment: 'Investment hinzufügen', topf: 'Topf hinzufügen'
+};
+const SHEET_TITEL_BEARBEITEN = {
+  budgetposten: 'Kostenstelle bearbeiten', einnahme: 'Einnahme bearbeiten',
+  konto: 'Konto bearbeiten', investment: 'Investment bearbeiten', topf: 'Topf bearbeiten'
+};
+
+function sheetOeffnenNeu(entity, id) {
+  const obj = findeObjekt(entity, id);
+  if (obj) sheetOeffnen(SHEET_TITEL_NEU[entity], entity, id, entityFormHTML(entity, obj), 'Hinzufügen', true);
+}
+
+/* Ersetzt das bisherige Inline-Aufklappen: Antippen einer Zeile oeffnet
+   dasselbe Sheet wie beim Neuanlegen, mit "Fertig" statt "Hinzufügen". */
+function zeileOeffnen(entity, id) {
+  const obj = findeObjekt(entity, id);
+  if (obj) sheetOeffnen(SHEET_TITEL_BEARBEITEN[entity], entity, id, entityFormHTML(entity, obj), 'Fertig', false);
+}
+
+let sheetOffen = null; /* { entity, id, neu } */
 let sheetAufraeumTimer = null;
 
-function sheetOeffnen(titel, entity, id, inhaltHtml, primaerLabel) {
+function sheetOeffnen(titel, entity, id, inhaltHtml, primaerLabel, istNeu) {
   clearTimeout(sheetAufraeumTimer); /* verhindert, dass eine noch laufende Schliess-Aufraeumung dieses neue Sheet gleich wieder versteckt */
-  sheetOffen = { entity, id };
+  sheetOffen = { entity, id, neu: !!istNeu };
   $('sheet-titel').textContent = titel;
   $('sheet-inhalt').innerHTML = inhaltHtml;
   $('sheet-primaer').textContent = primaerLabel;
+  const sekundaer = $('sheet-sekundaer');
+  if (istNeu) {
+    sekundaer.hidden = true;
+  } else {
+    const obj = findeObjekt(entity, id);
+    sekundaer.hidden = false;
+    sekundaer.textContent = obj.aktiv ? 'Deaktivieren' : 'Reaktivieren';
+  }
   document.body.style.overflow = 'hidden';
   const overlay = $('sheet-overlay');
   overlay.classList.add('sichtbar');
@@ -886,21 +898,48 @@ function sheetSchliessen() {
   }
 }
 
-/* Verwerfen (X, Hintergrund, Wischen): der nie bestaetigte Eintrag wird
-   bedingungslos entfernt — gleiche Logik wie verwerfen() beim alten Dialog. */
+/* Verwerfen (X, Hintergrund, Wischen): nur bei einer Neuanlage wird der nie
+   bestaetigte Eintrag bedingungslos entfernt. Beim Bearbeiten eines
+   bestehenden Eintrags loescht Verwerfen nie etwas (Regel 5) — es schliesst
+   nur die Ansicht, die Autosave-Aenderungen bleiben stehen. */
 function sheetVerwerfen() {
   if (!sheetOffen) return;
-  hartEntfernen(sheetOffen.entity, sheetOffen.id);
+  if (sheetOffen.neu) hartEntfernen(sheetOffen.entity, sheetOffen.id);
   sichern(); renderAktuellerTab(); sheetSchliessen();
 }
 
-/* Primaerknopf: gleiche Leer-Pruefung wie dialogUebernehmen() beim alten Dialog. */
+/* Primaerknopf: bei Neuanlage gleiche Leer-Pruefung wie bisher; beim
+   Bearbeiten gibt es nichts zu pruefen, nur zu schliessen. */
 function sheetUebernehmen() {
   if (!sheetOffen) return;
-  const { entity, id } = sheetOffen;
-  const obj = findeObjekt(entity, id);
-  if (obj && istLeer(entity, obj)) hartEntfernen(entity, id);
+  const { entity, id, neu } = sheetOffen;
+  let behalten = true;
+  if (neu) {
+    const obj = findeObjekt(entity, id);
+    if (obj && istLeer(entity, obj)) { hartEntfernen(entity, id); behalten = false; }
+  }
   sichern(); renderAktuellerTab(); sheetSchliessen();
+  if (behalten) zeigeToast(neu ? 'Hinzugefügt' : 'Gespeichert');
+}
+
+/* Sekundaerknopf im Sheet: Deaktivieren/Reaktivieren eines bestehenden
+   Eintrags, ohne das Sheet zu schliessen (unveraendertes setzeAktiv()). */
+function sheetUmschaltenAktiv() {
+  if (!sheetOffen) return;
+  const obj = findeObjekt(sheetOffen.entity, sheetOffen.id);
+  if (!obj) return;
+  setzeAktiv(sheetOffen.entity, sheetOffen.id, !obj.aktiv);
+  $('sheet-sekundaer').textContent = obj.aktiv ? 'Deaktivieren' : 'Reaktivieren';
+}
+
+let toastTimer = null;
+
+function zeigeToast(text) {
+  const el = $('toast');
+  el.textContent = text;
+  el.classList.add('sichtbar');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => el.classList.remove('sichtbar'), 2000);
 }
 
 /* Wischen zum Schliessen: nur ueber Griff/Kopfzeile, nicht ueber den
@@ -1016,14 +1055,6 @@ function monatsRasterHTML(entity, id, ausgewaehlt) {
   return html + '</div>';
 }
 
-function formAktionenHTML(entity, obj) {
-  return '<div class="formaktionen">' +
-    '<button type="button" class="ghost" data-action="' + (obj.aktiv ? 'deaktivieren' : 'reaktivieren') +
-    '" data-entity="' + entity + '" data-id="' + obj.id + '">' + (obj.aktiv ? 'Deaktivieren' : 'Reaktivieren') + '</button>' +
-    '<button type="button" data-action="schliessen" data-entity="' + entity + '" data-id="' + obj.id + '">Fertig</button>' +
-    '</div>';
-}
-
 function traegerOptionsHTML(aktuellerWert) {
   let html = '<optgroup label="Personen">';
   dok.personen.forEach((p) => { html += '<option value="' + p.id + '"' + (p.id === aktuellerWert ? ' selected' : '') + '>' + escapeHtml(personName(p.id)) + '</option>'; });
@@ -1074,14 +1105,12 @@ function aktualisiereGruppenListe() {
 /* ---------- Budget ---------- */
 
 function einnahmeZeileHTML(e) {
-  const offen = offenId.budget === e.id;
   const name = e.art && e.art.trim() ? escapeHtml(e.art) : '<i>(ohne Bezeichnung)</i>';
   const sub = personName(e.personId) + ' · ' + rhythmusName(e.rhythmus);
-  return '<div class="item' + (offen ? ' offen' : '') + (e.aktiv ? '' : ' inaktiv') + '">' +
+  return '<div class="item' + (e.aktiv ? '' : ' inaktiv') + '">' +
     '<div class="item-kopf" data-action="oeffnen" data-entity="einnahme" data-id="' + e.id + '">' +
     '<span class="chev">›</span><div class="haupt"><b>' + name + '</b><span>' + sub + '</span></div>' +
-    '<div class="betrag">' + formatCHF(e.betrag) + '</div></div>' +
-    (offen ? einnahmeFormHTML(e) + formAktionenHTML('einnahme', e) : '') + '</div>';
+    '<div class="betrag">' + formatCHF(e.betrag) + '</div></div></div>';
 }
 
 function einnahmeFormHTML(e) {
@@ -1101,14 +1130,12 @@ function einnahmeFormHTML(e) {
 
 function postenZeileHTML(p) {
   const k = dok.kategorien.find((x) => x.id === p.kategorieId) || { name: '', gruppe: '' };
-  const offen = offenId.budget === p.id;
   const name = k.name && k.name.trim() ? escapeHtml(k.name) : '<i>(ohne Bezeichnung)</i>';
   const sub = kostenartName(p.kostenart) + ' · ' + traegerName(p.traeger) + ' · ' + rhythmusName(p.rhythmus);
-  return '<div class="item' + (offen ? ' offen' : '') + (p.aktiv ? '' : ' inaktiv') + '">' +
+  return '<div class="item' + (p.aktiv ? '' : ' inaktiv') + '">' +
     '<div class="item-kopf" data-action="oeffnen" data-entity="budgetposten" data-id="' + p.id + '">' +
-    '<span class="chev">›</span><div class="haupt"><b><span class="badge badge-' + p.kostenart + '">' + p.kostenart +
-    '</span>' + name + '</b><span>' + sub + '</span></div><div class="betrag">' + formatCHF(p.betrag) + '</div></div>' +
-    (offen ? postenFormHTML(p, k) + formAktionenHTML('budgetposten', p) : '') + '</div>';
+    '<span class="chev">›</span><div class="haupt"><b>' + name +
+    '</b><span>' + sub + '</span></div><div class="betrag">' + formatCHF(p.betrag) + '</div></div></div>';
 }
 
 function postenFormHTML(p, k) {
@@ -1171,13 +1198,11 @@ function renderBudget() {
 /* ---------- Konten ---------- */
 
 function kontoZeileHTML(k) {
-  const offen = offenId.konten === k.id;
   const name = k.name && k.name.trim() ? escapeHtml(k.name) : '<i>(ohne Bezeichnung)</i>';
   const sub = kontoTypName(k.typ) + ' · ' + traegerName(k.inhaber) + (k.waehrung !== 'CHF' ? ' · ' + escapeHtml(k.waehrung) : '');
-  return '<div class="item' + (offen ? ' offen' : '') + (k.aktiv ? '' : ' inaktiv') + '">' +
+  return '<div class="item' + (k.aktiv ? '' : ' inaktiv') + '">' +
     '<div class="item-kopf" data-action="oeffnen" data-entity="konto" data-id="' + k.id + '">' +
-    '<span class="chev">›</span><div class="haupt"><b>' + name + '</b><span>' + sub + '</span></div></div>' +
-    (offen ? kontoFormHTML(k) + formAktionenHTML('konto', k) : '') + '</div>';
+    '<span class="chev">›</span><div class="haupt"><b>' + name + '</b><span>' + sub + '</span></div></div></div>';
 }
 
 function kontoFormHTML(k) {
@@ -1211,13 +1236,11 @@ function renderKonten() {
 /* ---------- Investment ---------- */
 
 function investmentZeileHTML(i) {
-  const offen = offenId.investment === i.id;
   const name = i.name && i.name.trim() ? escapeHtml(i.name) : '<i>(ohne Bezeichnung)</i>';
   const sub = investmentTypName(i.typ) + ' · ' + personName(i.inhaber) + ' · ' + (Number(i.renditeErwartetProJahr) || 0) + ' % p.a.';
-  return '<div class="item' + (offen ? ' offen' : '') + (i.aktiv ? '' : ' inaktiv') + '">' +
+  return '<div class="item' + (i.aktiv ? '' : ' inaktiv') + '">' +
     '<div class="item-kopf" data-action="oeffnen" data-entity="investment" data-id="' + i.id + '">' +
-    '<span class="chev">›</span><div class="haupt"><b>' + name + '</b><span>' + sub + '</span></div></div>' +
-    (offen ? investmentFormHTML(i) + formAktionenHTML('investment', i) : '') + '</div>';
+    '<span class="chev">›</span><div class="haupt"><b>' + name + '</b><span>' + sub + '</span></div></div></div>';
 }
 
 function investmentFormHTML(i) {
@@ -1272,14 +1295,12 @@ function summeHinweisHTML(anteile) {
 }
 
 function topfZeileHTML(t) {
-  const offen = offenId.mehr === t.id;
   const name = t.name && t.name.trim() ? escapeHtml(t.name) : '<i>(ohne Bezeichnung)</i>';
   const sub = verteilschluesselKurzText(t.verteilschluessel);
-  return '<div class="item' + (offen ? ' offen' : '') + (t.aktiv ? '' : ' inaktiv') + '">' +
+  return '<div class="item' + (t.aktiv ? '' : ' inaktiv') + '">' +
     '<div class="item-kopf" data-action="oeffnen" data-entity="topf" data-id="' + t.id + '">' +
     '<span class="chev">›</span><div class="haupt"><b>' + name + '</b><span>' + sub + '</span></div>' +
-    '<div class="betrag">Sockel ' + formatCHF(t.sockel) + '</div></div>' +
-    (offen ? topfFormHTML(t) + formAktionenHTML('topf', t) : '') + '</div>';
+    '<div class="betrag">Sockel ' + formatCHF(t.sockel) + '</div></div></div>';
 }
 
 function topfFormHTML(t) {
@@ -1339,6 +1360,8 @@ function renderUebersicht() {
   const kostGeglaettet = postenAktiv.reduce((a, p) => a + betragGeglaettet(p), 0);
   const kostFaellig = postenAktiv.reduce((a, p) => a + betragFaellig(p, monat), 0);
 
+  $('hero-zahl').textContent = formatCHF(einnFaellig - kostFaellig);
+
   $('uebersicht-brutto').innerHTML =
     zeileHTML('Einnahmen, geglättet', einnGeglaettet) +
     zeileHTML('Einnahmen, fällig diesen Monat', einnFaellig) +
@@ -1346,35 +1369,32 @@ function renderUebersicht() {
     zeileHTML('Kosten, fällig diesen Monat', kostFaellig);
 
   $('uebersicht-sparbetrag').innerHTML =
-    zeileHTML('Geplant, Fälligkeitssicht', einnFaellig - kostFaellig, true) +
     zeileHTML('Geplant, Durchschnittssicht', einnGeglaettet - kostGeglaettet);
 
   const anteile = einkommensAnteile(monat);
   const summeProPerson = {}; dok.personen.forEach((p) => { summeProPerson[p.id] = 0; });
   const aktiveToepfe = dok.toepfe.filter((t) => t.aktiv);
-  let summeKosten = 0;
 
   if (aktiveToepfe.length === 0) {
     $('uebersicht-toepfe').innerHTML = '<p class="leer">Noch keine Töpfe.</p>';
   } else {
-    let html = '<div class="tabelle-wrap"><table class="tabelle"><thead><tr><th>Topf</th><th>Kosten</th>';
-    dok.personen.forEach((p) => { html += '<th>' + escapeHtml(personName(p.id)) + '</th>'; });
-    html += '</tr></thead><tbody>';
+    let html = ''; let summeKosten = 0;
     aktiveToepfe.forEach((t) => {
       const kosten = postenAktiv.filter((p) => p.traeger === t.id).reduce((a, p) => a + betragGeglaettet(p), 0);
       summeKosten += kosten;
       const anteilePersonen = anteilProTopf(t, anteile);
-      html += '<tr><td>' + escapeHtml(t.name || '(ohne Bezeichnung)') + '</td><td>' + formatCHF(kosten) + '</td>';
+      html += '<div class="personblock"><h4>' + escapeHtml(t.name || '(ohne Bezeichnung)') + '</h4>' +
+        zeileHTML('Kosten', kosten);
       dok.personen.forEach((p) => {
         const beitrag = kosten * (Number(anteilePersonen[p.id]) || 0) / 100;
         summeProPerson[p.id] += beitrag;
-        html += '<td>' + formatCHF(beitrag) + '</td>';
+        html += zeileHTML(personName(p.id), beitrag);
       });
-      html += '</tr>';
+      html += '</div>';
     });
-    html += '</tbody><tfoot><tr><td>Total</td><td>' + formatCHF(summeKosten) + '</td>';
-    dok.personen.forEach((p) => { html += '<td>' + formatCHF(summeProPerson[p.id]) + '</td>'; });
-    html += '</tr></tfoot></table></div>';
+    html += '<div class="personblock"><h4>Total</h4>' + zeileHTML('Kosten', summeKosten, true);
+    dok.personen.forEach((p) => { html += zeileHTML(personName(p.id), summeProPerson[p.id], true); });
+    html += '</div>';
     $('uebersicht-toepfe').innerHTML = html;
   }
 
@@ -1448,41 +1468,6 @@ function sicherungKopieren() {
   }
 }
 
-/* ---------- Dialog fuer Neuanlagen ---------- */
-
-const DIALOG_TITEL = {
-  budgetposten: 'Neuer Posten', einnahme: 'Neue Einnahme', konto: 'Neues Konto',
-  investment: 'Neues Investment', topf: 'Neuer Topf'
-};
-
-function dialogOeffnen(entity, id) {
-  dialogOffen = { entity, id };
-  document.body.style.overflow = 'hidden';
-  renderDialog();
-}
-
-function renderDialog() {
-  const overlay = $('dialog-overlay');
-  if (!dialogOffen) { overlay.classList.remove('offen'); return; }
-  const { entity, id } = dialogOffen;
-  const obj = findeObjekt(entity, id);
-  if (!obj) { dialogOffen = null; overlay.classList.remove('offen'); return; }
-  let inhalt;
-  if (entity === 'budgetposten') inhalt = postenFormHTML(obj, dok.kategorien.find((x) => x.id === obj.kategorieId) || { name: '', gruppe: '' });
-  else if (entity === 'einnahme') inhalt = einnahmeFormHTML(obj);
-  else if (entity === 'konto') inhalt = kontoFormHTML(obj);
-  else if (entity === 'investment') inhalt = investmentFormHTML(obj);
-  else if (entity === 'topf') inhalt = topfFormHTML(obj);
-  $('dialog-box').innerHTML =
-    '<div class="dialog-kopf"><h3>' + DIALOG_TITEL[entity] + '</h3>' +
-      '<button type="button" class="dialog-schliessen" data-action="dialog-verwerfen" data-entity="' + entity +
-      '" data-id="' + id + '" aria-label="Verwerfen">&times;</button></div>' +
-    '<div class="dialog-inhalt">' + inhalt + '</div>' +
-    '<div class="dialog-fuss"><button type="button" data-action="dialog-uebernehmen" data-entity="' + entity +
-      '" data-id="' + id + '">Übernehmen</button></div>';
-  overlay.classList.add('offen');
-}
-
 /* ---------- Rendersteuerung ---------- */
 
 function renderStatuszeile() {
@@ -1523,20 +1508,16 @@ function behandeln(action, el) {
   const d = el.dataset;
   switch (action) {
     case 'tab': tabWechseln(d.tab); break;
-    case 'oeffnen': offenId[tabAktuell] = (offenId[tabAktuell] === d.id ? null : d.id); renderAktuellerTab(); break;
-    case 'schliessen': schliessen(d.entity, d.id); break;
-    case 'deaktivieren': setzeAktiv(d.entity, d.id, false); break;
-    case 'reaktivieren': setzeAktiv(d.entity, d.id, true); break;
+    case 'oeffnen': zeileOeffnen(d.entity, d.id); break;
     case 'inaktive-umschalten': inaktiveSichtbar[d.tab] = !inaktiveSichtbar[d.tab]; renderAktuellerTab(); break;
     case 'posten-neu': neuerBudgetposten(d.gruppe || ''); break;
     case 'einnahme-neu': neueEinnahme(); break;
     case 'konto-neu': neuesKonto(); break;
     case 'investment-neu': neuesInvestment(); break;
     case 'topf-neu': neuerTopf(); break;
-    case 'dialog-verwerfen': verwerfen(d.entity, d.id); break;
-    case 'dialog-uebernehmen': dialogUebernehmen(d.entity, d.id); break;
     case 'sheet-verwerfen': sheetVerwerfen(); break;
     case 'sheet-uebernehmen': sheetUebernehmen(); break;
+    case 'sheet-umschalten-aktiv': sheetUmschaltenAktiv(); break;
     case 'info-oeffnen': infoOeffnen(d.punkte); break;
     case 'info-schliessen': infoSchliessen(); break;
     case 'monat-toggle': monatTogglen(d.entity, d.id, Number(d.monat)); break;
@@ -1578,8 +1559,7 @@ $('sicherung-datei').addEventListener('change', (e) => {
       const roh = JSON.parse(r.result);
       if (!roh || typeof roh !== 'object') throw new Error('Unerwarteter Inhalt');
       dok = migrieren(roh);
-      offenId = { budget: null, konten: null, investment: null, mehr: null };
-      dialogOffen = null; document.body.style.overflow = ''; renderDialog();
+      if (sheetOffen) sheetSchliessen();
       uebersichtMonat = clampMonat(monatHeute());
       renderAlles(); sichern();
       log('Sicherung geladen: ' + f.name);
