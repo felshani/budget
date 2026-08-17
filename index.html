@@ -216,6 +216,37 @@ nav.tabbar button:active{opacity:.7}
 
 .monatjahr{display:flex;gap:8px;min-width:0}
 .monatjahr select{flex:1;min-width:0}
+
+/* Bottom Sheet nach DESIGN.md — wiederverwendbare Komponente.
+   Vorerst nur fuer "Kostenstelle hinzufuegen" verwendet; der alte
+   .dialog-overlay bleibt fuer die uebrigen Screens vorerst bestehen. */
+.sheet-overlay{
+  position:fixed;inset:0;background:rgba(0,0,0,0);display:none;
+  align-items:flex-end;justify-content:center;z-index:70;
+}
+.sheet-overlay.sichtbar{display:flex}
+.sheet-overlay.offen{background:rgba(0,0,0,.4)}
+.sheet{
+  background:var(--card);width:100%;max-width:560px;max-height:90vh;
+  border-radius:20px 20px 0 0;display:flex;flex-direction:column;overflow:hidden;
+  transform:translateY(100%);
+}
+@media (prefers-reduced-motion: no-preference){
+  .sheet-overlay.sichtbar{transition:background-color .3s ease}
+  .sheet-overlay.sichtbar .sheet{transition:transform .32s cubic-bezier(.32,.72,0,1)}
+}
+.sheet-overlay.offen .sheet{transform:translateY(0)}
+.sheet-griff{width:36px;height:4px;border-radius:2px;background:var(--rule);margin:10px auto 0;flex:0 0 auto}
+.sheet-kopf{position:relative;display:flex;align-items:center;justify-content:center;
+  padding:10px 48px 14px;border-bottom:1px solid var(--rule);flex:0 0 auto}
+.sheet-schliessen{position:absolute;left:8px;top:4px;background:transparent;border:0;
+  color:var(--ink-soft);font-size:22px;line-height:1;padding:6px 8px;border-radius:8px}
+.sheet-titel{margin:0;font-size:16px;font-weight:650;text-align:center}
+.sheet-inhalt{padding:20px;overflow-y:auto;flex:1;min-width:0}
+.sheet-inhalt .editform{gap:24px;padding:0} /* DESIGN.md: min. 24px zwischen Bloecken */
+.sheet-fuss{padding:14px 20px calc(14px + env(safe-area-inset-bottom));border-top:1px solid var(--rule);flex:0 0 auto}
+.sheet-primaer{width:100%;min-height:52px;border-radius:16px;font-size:16px;font-weight:600;
+  background:var(--ok);border-color:var(--ok);color:var(--card)}
 </style>
 </head>
 <body>
@@ -389,6 +420,20 @@ nav.tabbar button:active{opacity:.7}
 
   <div class="info-overlay" id="info-overlay">
     <div class="info-box" id="info-box"></div>
+  </div>
+
+  <div class="sheet-overlay" id="sheet-overlay">
+    <div class="sheet" id="sheet">
+      <div class="sheet-griff" aria-hidden="true"></div>
+      <div class="sheet-kopf">
+        <button type="button" class="sheet-schliessen" data-action="sheet-verwerfen" aria-label="Schliessen">&times;</button>
+        <h3 class="sheet-titel" id="sheet-titel"></h3>
+      </div>
+      <div class="sheet-inhalt" id="sheet-inhalt"></div>
+      <div class="sheet-fuss">
+        <button type="button" class="sheet-primaer" id="sheet-primaer" data-action="sheet-uebernehmen"></button>
+      </div>
+    </div>
   </div>
 </div>
 
@@ -684,7 +729,8 @@ function neuerBudgetposten(gruppeVorschlag) {
     gueltigAb: dok.einstellungen.startmonat, gueltigBis: null, aktiv: true
   };
   dok.budgetposten.push(posten);
-  sichern(); dialogOeffnen('budgetposten', posten.id);
+  sichern();
+  sheetOeffnen('Kostenstelle hinzufügen', 'budgetposten', posten.id, postenFormHTML(posten, kat), 'Hinzufügen');
 }
 
 function neueEinnahme() {
@@ -801,6 +847,101 @@ function dialogSchliessen() {
   document.body.style.overflow = '';
   renderDialog(); sichern(); renderAktuellerTab();
 }
+
+/* ---------- Bottom Sheet nach DESIGN.md (wiederverwendbar) ----------
+   Loest den vollflaechigen Dialog vorerst nur fuer "Kostenstelle
+   hinzufuegen" ab. Nutzt dieselben, unveraenderten Primitiven
+   (hartEntfernen, istLeer, findeObjekt, sichern, renderAktuellerTab). */
+
+let sheetOffen = null; /* { entity, id } */
+let sheetAufraeumTimer = null;
+
+function sheetOeffnen(titel, entity, id, inhaltHtml, primaerLabel) {
+  clearTimeout(sheetAufraeumTimer); /* verhindert, dass eine noch laufende Schliess-Aufraeumung dieses neue Sheet gleich wieder versteckt */
+  sheetOffen = { entity, id };
+  $('sheet-titel').textContent = titel;
+  $('sheet-inhalt').innerHTML = inhaltHtml;
+  $('sheet-primaer').textContent = primaerLabel;
+  document.body.style.overflow = 'hidden';
+  const overlay = $('sheet-overlay');
+  overlay.classList.add('sichtbar');
+  overlay.getBoundingClientRect(); /* Reflow erzwingen, damit die Transition greift */
+  requestAnimationFrame(() => requestAnimationFrame(() => overlay.classList.add('offen')));
+}
+
+function sheetSchliessen() {
+  const overlay = $('sheet-overlay'), sheet = $('sheet');
+  sheetOffen = null;
+  overlay.classList.remove('offen');
+  clearTimeout(sheetAufraeumTimer);
+  const aufraeumen = () => {
+    clearTimeout(sheetAufraeumTimer);
+    overlay.classList.remove('sichtbar'); sheet.style.transform = ''; document.body.style.overflow = '';
+  };
+  if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+    aufraeumen();
+  } else {
+    sheet.addEventListener('transitionend', aufraeumen, { once: true });
+    sheetAufraeumTimer = setTimeout(aufraeumen, 400);
+  }
+}
+
+/* Verwerfen (X, Hintergrund, Wischen): der nie bestaetigte Eintrag wird
+   bedingungslos entfernt — gleiche Logik wie verwerfen() beim alten Dialog. */
+function sheetVerwerfen() {
+  if (!sheetOffen) return;
+  hartEntfernen(sheetOffen.entity, sheetOffen.id);
+  sichern(); renderAktuellerTab(); sheetSchliessen();
+}
+
+/* Primaerknopf: gleiche Leer-Pruefung wie dialogUebernehmen() beim alten Dialog. */
+function sheetUebernehmen() {
+  if (!sheetOffen) return;
+  const { entity, id } = sheetOffen;
+  const obj = findeObjekt(entity, id);
+  if (obj && istLeer(entity, obj)) hartEntfernen(entity, id);
+  sichern(); renderAktuellerTab(); sheetSchliessen();
+}
+
+/* Wischen zum Schliessen: nur ueber Griff/Kopfzeile, nicht ueber den
+   scrollbaren Inhalt (Formularfelder sollen normal bedienbar bleiben). */
+let ziehStartY = null, ziehAktiv = false;
+
+function ziehStart(e) {
+  if (!sheetOffen) return;
+  ziehAktiv = true;
+  ziehStartY = e.touches ? e.touches[0].clientY : e.clientY;
+  $('sheet').style.transition = 'none';
+}
+
+function ziehBewegung(e) {
+  if (!ziehAktiv) return;
+  const y = e.touches ? e.touches[0].clientY : e.clientY;
+  $('sheet').style.transform = 'translateY(' + Math.max(0, y - ziehStartY) + 'px)';
+}
+
+function ziehEnde(e) {
+  if (!ziehAktiv) return;
+  ziehAktiv = false;
+  const y = e.changedTouches ? e.changedTouches[0].clientY : e.clientY;
+  const delta = Math.max(0, y - ziehStartY);
+  $('sheet').style.transition = '';
+  $('sheet').style.transform = '';
+  if (delta > 120) sheetVerwerfen();
+}
+
+function istZiehGriff(el) {
+  if (!el) return false;
+  if (el.closest('button, a, input, select, textarea')) return false; /* Klicks auf Bedienelemente sind kein Wisch-Start */
+  return !!el.closest('.sheet-griff, .sheet-kopf');
+}
+
+document.addEventListener('touchstart', (e) => { if (istZiehGriff(e.target)) ziehStart(e); }, { passive: true });
+document.addEventListener('touchmove', ziehBewegung, { passive: true });
+document.addEventListener('touchend', ziehEnde);
+document.addEventListener('mousedown', (e) => { if (istZiehGriff(e.target)) ziehStart(e); });
+document.addEventListener('mousemove', ziehBewegung);
+document.addEventListener('mouseup', ziehEnde);
 
 /* ---------- Bausteine fuer HTML ---------- */
 
@@ -1394,6 +1535,8 @@ function behandeln(action, el) {
     case 'topf-neu': neuerTopf(); break;
     case 'dialog-verwerfen': verwerfen(d.entity, d.id); break;
     case 'dialog-uebernehmen': dialogUebernehmen(d.entity, d.id); break;
+    case 'sheet-verwerfen': sheetVerwerfen(); break;
+    case 'sheet-uebernehmen': sheetUebernehmen(); break;
     case 'info-oeffnen': infoOeffnen(d.punkte); break;
     case 'info-schliessen': infoSchliessen(); break;
     case 'monat-toggle': monatTogglen(d.entity, d.id, Number(d.monat)); break;
@@ -1407,6 +1550,7 @@ function behandeln(action, el) {
 
 document.addEventListener('click', (e) => {
   if (e.target.id === 'info-overlay') { infoSchliessen(); return; }
+  if (e.target.id === 'sheet-overlay') { sheetVerwerfen(); return; }
   const el = e.target.closest('[data-action]');
   if (el) behandeln(el.dataset.action, el);
 });
