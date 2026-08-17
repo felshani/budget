@@ -128,8 +128,10 @@ button:active{opacity:.72}
   border-radius:9px;font-size:17px;padding:0;line-height:1}
 .monatwahl .aktuell{font-weight:650;font-size:15.5px;min-width:150px;text-align:center}
 
-.personblock{margin-bottom:6px}
-.personblock:last-child{margin-bottom:0}
+/* Abgesetzte Zusammenfassung (z.B. "Total"): bewusst OHNE Kartenrahmen,
+   damit sie sich klar von den echten Karten darueber unterscheidet */
+.zusammenfassung{padding:10px 2px 4px;margin-bottom:24px}
+.zusammenfassung h4{margin:0 0 4px}
 
 /* Groesste Kennzahl der App: nur einmal pro Screen, DESIGN.md */
 .hero{text-align:center;padding:6px 0 2px}
@@ -268,15 +270,11 @@ nav.tabbar button:active{opacity:.7}
         <div id="uebersicht-sparbetrag"></div>
       </section>
 
-      <section>
-        <h2>Beitrag je Topf</h2>
-        <div id="uebersicht-toepfe"></div>
-      </section>
+      <h2>Beitrag je Topf</h2>
+      <div id="uebersicht-toepfe"></div>
 
-      <section class="plain">
-        <h2>Je Person</h2>
-        <div id="uebersicht-personen"></div>
-      </section>
+      <h2>Je Person</h2>
+      <div id="uebersicht-personen"></div>
     </section>
 
     <!-- ===================== Budget ===================== -->
@@ -1383,16 +1381,16 @@ function renderUebersicht() {
       const kosten = postenAktiv.filter((p) => p.traeger === t.id).reduce((a, p) => a + betragGeglaettet(p), 0);
       summeKosten += kosten;
       const anteilePersonen = anteilProTopf(t, anteile);
-      html += '<div class="personblock"><h4>' + escapeHtml(t.name || '(ohne Bezeichnung)') + '</h4>' +
+      html += '<section><h2>' + escapeHtml(t.name || '(ohne Bezeichnung)') + '</h2>' +
         zeileHTML('Kosten', kosten);
       dok.personen.forEach((p) => {
         const beitrag = kosten * (Number(anteilePersonen[p.id]) || 0) / 100;
         summeProPerson[p.id] += beitrag;
         html += zeileHTML(personName(p.id), beitrag);
       });
-      html += '</div>';
+      html += '</section>';
     });
-    html += '<div class="personblock"><h4>Total</h4>' + zeileHTML('Kosten', summeKosten, true);
+    html += '<div class="zusammenfassung"><h4>Total</h4>' + zeileHTML('Kosten', summeKosten, true);
     dok.personen.forEach((p) => { html += zeileHTML(personName(p.id), summeProPerson[p.id], true); });
     html += '</div>';
     $('uebersicht-toepfe').innerHTML = html;
@@ -1404,12 +1402,12 @@ function renderUebersicht() {
     const eigeneKosten = postenAktiv.filter((x) => x.traeger === p.id).reduce((a, x) => a + betragGeglaettet(x), 0);
     const beitraege = summeProPerson[p.id] || 0;
     const rest = eigeneEinnahmen - eigeneKosten - beitraege;
-    personenHTML += '<div class="personblock"><h4>' + escapeHtml(personName(p.id)) + '</h4>' +
+    personenHTML += '<section><h2>' + escapeHtml(personName(p.id)) + '</h2>' +
       zeileHTML('Einnahmen', eigeneEinnahmen) +
       zeileHTML('Eigene Kosten', eigeneKosten) +
       zeileHTML('Beiträge an Töpfe', beitraege) +
       zeileHTML('Ergebnis', rest, true) +
-      '</div>';
+      '</section>';
   });
   $('uebersicht-personen').innerHTML = personenHTML;
 }
