@@ -1,7 +1,7 @@
 /* Service Worker — App-Shell im Cache, damit die App offline startet.
    Bei jeder Code-Aenderung CACHE hochzaehlen, sonst bleibt die alte Version. */
 
-const CACHE = 'budget-m1-v4';
+const CACHE = 'budget-m1-v6';
 
 const SHELL = [
   './',
