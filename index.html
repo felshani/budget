@@ -1021,6 +1021,91 @@ const WIZARD_TITEL = { personen: 'Personen', einnahmen: 'Einnahmen', kostenstell
 let wizardOffen = false;
 let wizardSchritt = 0;
 let wizardAufraeumTimer = null;
+let wizardVorlageEingefuegt = false;
+
+/* Gaengige Kostenstellen eines Schweizer Zweipersonenhaushalts, rein
+   strukturell (kein Anbieter-/Produktname, kein Personenname, kein
+   Betrag — Personenbezug laeuft ausschliesslich ueber das bestehende
+   traeger-Feld). [Bezeichnung, Gruppe, Kostenart, TraegerTyp]; Gruppen
+   decken sich bewusst mit GRUPPEN_VORSCHLAEGE. TraegerTyp:
+   'haushalt' | 'ferien' | 'p1' | 'p2', siehe wizardTraegerId(). */
+const WIZARD_KOSTENSTELLEN_VORLAGE = [
+  ['Miete (inkl. Nebenkosten)', 'Wohnkosten', 'D', 'haushalt'],
+  ['Heiz-, Nebenkosten (Schlussabrechnung)', 'Wohnkosten', 'R', 'haushalt'],
+  ['Energierechnung', 'Energie und Kommunikation', 'R', 'haushalt'],
+  ['Telefonie, Internet, TV', 'Energie und Kommunikation', 'D', 'haushalt'],
+  ['Streaming-Abonnemente', 'Energie und Kommunikation', 'D', 'haushalt'],
+  ['Serafe, Kabelanschluss', 'Energie und Kommunikation', 'R', 'haushalt'],
+  ['Kantons-, Gemeinde-, Kirchensteuern', 'Steuern', 'R', 'haushalt'],
+  ['Direkte Bundessteuer', 'Steuern', 'R', 'haushalt'],
+  ['Feuerwehrsteuer, Wehrpflichtersatz', 'Steuern', 'R', 'haushalt'],
+  ['Krankenversicherung KVG', 'Versicherungen und Vorsorge', 'D', 'p1'],
+  ['Krankenversicherung KVG', 'Versicherungen und Vorsorge', 'D', 'p2'],
+  ['Zusatzversicherung', 'Versicherungen und Vorsorge', 'D', 'p1'],
+  ['Zusatzversicherung', 'Versicherungen und Vorsorge', 'D', 'p2'],
+  ['Säule 3a', 'Versicherungen und Vorsorge', 'D', 'p1'],
+  ['Säule 3a', 'Versicherungen und Vorsorge', 'D', 'p2'],
+  ['Hausrat-, Privathaftpflichtversicherung', 'Versicherungen und Vorsorge', 'R', 'haushalt'],
+  ['Reiseversicherung', 'Versicherungen und Vorsorge', 'R', 'haushalt'],
+  ['Mietkaution', 'Versicherungen und Vorsorge', 'R', 'haushalt'],
+  ['Rechtsschutzversicherung', 'Versicherungen und Vorsorge', 'R', 'haushalt'],
+  ['Weitere Versicherungen', 'Versicherungen und Vorsorge', 'R', 'haushalt'],
+  ['Abonnemente (GA, Halbtax, Monatskarten usw.)', 'Öffentlicher Verkehr', 'R', 'haushalt'],
+  ['Mehrfahrtenkarten, Einzelbillette', 'Öffentlicher Verkehr', 'R', 'haushalt'],
+  ['Motorfahrzeugsteuer', 'Auto', 'R', 'haushalt'],
+  ['Versicherung (Haftpflicht, Kasko)', 'Auto', 'R', 'haushalt'],
+  ['Treibstoff-, Ladekosten (Benzin, Diesel, Strom)', 'Auto', 'V', 'haushalt'],
+  ['Unterhalt (Service, Reparaturen, Reifen, Vignette usw.)', 'Auto', 'R', 'haushalt'],
+  ['Garage, Parkplatz, Parkgebühren, Bussen', 'Auto', 'D', 'haushalt'],
+  ['Leasing, Neuanschaffung', 'Auto', 'D', 'haushalt'],
+  ['Nahrungsmittel, Getränke', 'Haushalt', 'V', 'haushalt'],
+  ['Haushaltsnebenkosten (Körperpflege, Reinigung usw.)', 'Haushalt', 'V', 'haushalt'],
+  ['Gäste, Anlässe', 'Haushalt', 'V', 'haushalt'],
+  ['Haustiere', 'Haushalt', 'V', 'haushalt'],
+  ['Kleider, Schuhe', 'Persönliche Ausgaben', 'V', 'p1'],
+  ['Kleider, Schuhe', 'Persönliche Ausgaben', 'V', 'p2'],
+  ['Coiffeur', 'Persönliche Ausgaben', 'V', 'p1'],
+  ['Coiffeur', 'Persönliche Ausgaben', 'V', 'p2'],
+  ['Verpflegung ausser Haus', 'Persönliche Ausgaben', 'V', 'p1'],
+  ['Verpflegung ausser Haus', 'Persönliche Ausgaben', 'V', 'p2'],
+  ['Sonstige persönliche Auslagen', 'Persönliche Ausgaben', 'V', 'p1'],
+  ['Sonstige persönliche Auslagen', 'Persönliche Ausgaben', 'V', 'p2'],
+  ['Franchise, Selbstbehalt (Kranken-, Unfallversicherung)', 'Rückstellungen', 'R', 'haushalt'],
+  ['Augen-, Zahnkontrolle', 'Rückstellungen', 'R', 'haushalt'],
+  ['Geschenke, Spenden', 'Rückstellungen', 'R', 'haushalt'],
+  ['Unvorhergesehenes (Reserve)', 'Rückstellungen', 'R', 'haushalt'],
+  ['Ferien', 'Rückstellungen', 'V', 'ferien']
+];
+
+function wizardTraegerId(typ) {
+  if (typ === 'p1') return dok.personen[0].id;
+  if (typ === 'p2') return dok.personen[1].id;
+  if (typ === 'ferien') return (dok.toepfe.find((t) => t.aktiv && t.name === 'Ferien') || dok.toepfe[1] || dok.toepfe[0] || dok.personen[0]).id;
+  return (dok.toepfe.find((t) => t.aktiv && t.name === 'Haushalt') || dok.toepfe[0] || dok.personen[0]).id;
+}
+
+/* Reine Datenfunktion: ergaenzt fehlende Standard-Kostenstellen (siehe
+   WIZARD_KOSTENSTELLEN_VORLAGE), legt nichts doppelt an. Kein Rendern/
+   Speichern hier — macht der Aufrufer, damit die Funktion unabhaengig
+   von Sheet/Assistent-Zustand bleibt. Gibt die Anzahl neuer Posten zurueck. */
+function wizardVorlageEinfuegenFehlende() {
+  let eingefuegt = 0;
+  WIZARD_KOSTENSTELLEN_VORLAGE.forEach(([name, gruppe, kostenart, traegerTyp]) => {
+    const traeger = wizardTraegerId(traegerTyp);
+    const vorhanden = dok.budgetposten.some((p) => p.aktiv && p.traeger === traeger &&
+      dok.kategorien.some((k) => k.id === p.kategorieId && k.aktiv && k.name === name));
+    if (vorhanden) return;
+    const kat = { id: neueId(), name, gruppe, aktiv: true };
+    dok.kategorien.push(kat);
+    dok.budgetposten.push({
+      id: neueId(), kategorieId: kat.id, betrag: 0, kostenart, traeger,
+      rhythmus: 'monatlich', faelligMonate: [], verteilschluessel: null,
+      gueltigAb: dok.einstellungen.startmonat, gueltigBis: null, aktiv: true
+    });
+    eingefuegt++;
+  });
+  return eingefuegt;
+}
 
 /* Ein Overlay ist "hidden" solange gar keines offen ist; sobald eines der
    beiden (Assistent, Sheet) offen ist, bleibt der Hintergrund gesperrt —
@@ -1041,13 +1126,18 @@ function wizardInhaltHTML(schritt) {
       '</div><div class="btns"><button type="button" data-action="einnahme-neu">+ hinzufügen</button></div>';
   }
   const liste = dok.budgetposten.filter((p) => p.aktiv);
-  return '<div class="liste">' +
+  return '<p class="note" style="margin-bottom:12px">Gängige Positionen eines Schweizer Haushaltsbudgets wurden mit Betrag 0 vorausgefüllt. Nicht Zutreffendes deaktivieren, restliche Beträge und Träger anpassen.</p>' +
+    '<div class="liste">' +
     (liste.length ? liste.map(postenZeileHTML).join('') : '<p class="leer">Noch keine Kostenstellen erfasst.</p>') +
     '</div><div class="btns"><button type="button" data-action="posten-neu">+ hinzufügen</button></div>';
 }
 
 function renderWizardSchritt() {
   const schritt = WIZARD_SCHRITTE[wizardSchritt];
+  if (schritt === 'kostenstellen' && !wizardVorlageEingefuegt) {
+    wizardVorlageEingefuegt = true;
+    if (wizardVorlageEinfuegenFehlende() > 0) { sichern(); renderAktuellerTab(); }
+  }
   $('wizard-fortschritt').textContent = 'Schritt ' + (wizardSchritt + 1) + ' von ' + WIZARD_SCHRITTE.length;
   $('wizard-titel').textContent = WIZARD_TITEL[schritt];
   $('wizard-inhalt').innerHTML = wizardInhaltHTML(schritt);
@@ -1059,6 +1149,7 @@ function wizardOeffnen() {
   clearTimeout(wizardAufraeumTimer);
   wizardOffen = true;
   wizardSchritt = 0;
+  wizardVorlageEingefuegt = false;
   renderWizardSchritt();
   aktualisiereScrollSperre();
   const overlay = $('wizard-overlay');
