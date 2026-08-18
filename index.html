@@ -212,6 +212,8 @@ nav.tabbar button:active{opacity:.7}
 .sheet-schliessen{position:absolute;left:8px;top:4px;background:transparent;border:0;
   color:var(--ink-soft);font-size:22px;line-height:1;padding:6px 8px;border-radius:8px}
 .sheet-titel{margin:0;font-size:16px;font-weight:650;text-align:center}
+.wizard-fortschritt{margin:8px 0 0;font-size:12px;font-weight:650;letter-spacing:.03em;
+  color:var(--ink-soft);text-align:center;text-transform:uppercase}
 .sheet-inhalt{padding:20px;overflow-y:auto;flex:1;min-width:0}
 .sheet-inhalt .editform{gap:24px;padding:0} /* DESIGN.md: min. 24px zwischen Bloecken */
 .sheet-fuss{padding:14px 20px calc(14px + env(safe-area-inset-bottom));border-top:1px solid var(--rule);flex:0 0 auto}
@@ -320,6 +322,12 @@ nav.tabbar button:active{opacity:.7}
     <!-- ===================== Mehr ===================== -->
     <section class="page" id="seite-mehr" style="background:transparent;border:0;padding:0;margin:0">
 
+      <section class="plain">
+        <h2>Einstiegs-Assistent</h2>
+        <p class="note" style="margin-bottom:12px">Führt Schritt für Schritt durch Personen, Einnahmen und Kostenstellen.</p>
+        <button type="button" class="ghost" data-action="wizard-oeffnen">Assistent erneut starten</button>
+      </section>
+
       <section>
         <h2>Personen</h2>
         <div id="personen-felder" style="display:flex;flex-direction:column;gap:12px"></div>
@@ -419,6 +427,22 @@ nav.tabbar button:active{opacity:.7}
 
   <div class="info-overlay" id="info-overlay">
     <div class="info-box" id="info-box"></div>
+  </div>
+
+  <div class="sheet-overlay" id="wizard-overlay">
+    <div class="sheet" id="wizard-sheet">
+      <div class="sheet-griff" aria-hidden="true"></div>
+      <p class="wizard-fortschritt" id="wizard-fortschritt"></p>
+      <div class="sheet-kopf">
+        <button type="button" class="sheet-schliessen" data-action="wizard-schliessen" aria-label="Schliessen">&times;</button>
+        <h3 class="sheet-titel" id="wizard-titel"></h3>
+      </div>
+      <div class="sheet-inhalt" id="wizard-inhalt"></div>
+      <div class="sheet-fuss">
+        <button type="button" class="sheet-primaer" id="wizard-primaer" data-action="wizard-weiter"></button>
+        <button type="button" class="sheet-sekundaer" id="wizard-zurueck" data-action="wizard-zurueck" hidden>Zurück</button>
+      </div>
+    </div>
   </div>
 
   <div class="sheet-overlay" id="sheet-overlay">
@@ -872,7 +896,7 @@ function sheetOeffnen(titel, entity, id, inhaltHtml, primaerLabel, istNeu) {
     sekundaer.hidden = false;
     sekundaer.textContent = obj.aktiv ? 'Deaktivieren' : 'Reaktivieren';
   }
-  document.body.style.overflow = 'hidden';
+  aktualisiereScrollSperre();
   const overlay = $('sheet-overlay');
   overlay.classList.add('sichtbar');
   overlay.getBoundingClientRect(); /* Reflow erzwingen, damit die Transition greift */
@@ -886,7 +910,7 @@ function sheetSchliessen() {
   clearTimeout(sheetAufraeumTimer);
   const aufraeumen = () => {
     clearTimeout(sheetAufraeumTimer);
-    overlay.classList.remove('sichtbar'); sheet.style.transform = ''; document.body.style.overflow = '';
+    overlay.classList.remove('sichtbar'); sheet.style.transform = ''; aktualisiereScrollSperre();
   };
   if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
     aufraeumen();
@@ -904,6 +928,7 @@ function sheetVerwerfen() {
   if (!sheetOffen) return;
   if (sheetOffen.neu) hartEntfernen(sheetOffen.entity, sheetOffen.id);
   sichern(); renderAktuellerTab(); sheetSchliessen();
+  if (wizardOffen) renderWizardSchritt(); /* Liste im Assistenten-Schritt auffrischen */
 }
 
 /* Primaerknopf: bei Neuanlage gleiche Leer-Pruefung wie bisher; beim
@@ -917,6 +942,7 @@ function sheetUebernehmen() {
     if (obj && istLeer(entity, obj)) { hartEntfernen(entity, id); behalten = false; }
   }
   sichern(); renderAktuellerTab(); sheetSchliessen();
+  if (wizardOffen) renderWizardSchritt(); /* Liste im Assistenten-Schritt auffrischen */
   if (behalten) zeigeToast(neu ? 'Hinzugefügt' : 'Gespeichert');
 }
 
@@ -979,6 +1005,99 @@ document.addEventListener('touchend', ziehEnde);
 document.addEventListener('mousedown', (e) => { if (istZiehGriff(e.target)) ziehStart(e); });
 document.addEventListener('mousemove', ziehBewegung);
 document.addEventListener('mouseup', ziehEnde);
+
+/* ---------- Einstiegs-Assistent ----------
+   Fuehrt formularweise durch die wichtigsten Stammdaten: Personen,
+   Einnahmen, Kostenstellen. Erfasst nichts selbst — jeder Schritt zeigt
+   die bestehende Liste und oeffnet zum Erfassen dasselbe Bottom Sheet wie
+   ausserhalb des Assistenten (Punkt D.1 in CLAUDE.md: keine neue,
+   parallele Erfassungslogik). Oeffnet automatisch beim allerersten Start
+   (beide Personennamen leer) und ist zusaetzlich jederzeit unter "Mehr"
+   erneut aufrufbar. */
+
+const WIZARD_SCHRITTE = ['personen', 'einnahmen', 'kostenstellen'];
+const WIZARD_TITEL = { personen: 'Personen', einnahmen: 'Einnahmen', kostenstellen: 'Kostenstellen' };
+
+let wizardOffen = false;
+let wizardSchritt = 0;
+let wizardAufraeumTimer = null;
+
+/* Ein Overlay ist "hidden" solange gar keines offen ist; sobald eines der
+   beiden (Assistent, Sheet) offen ist, bleibt der Hintergrund gesperrt —
+   auch wenn beide gleichzeitig offen sind (Sheet ueber dem Assistenten). */
+function aktualisiereScrollSperre() {
+  document.body.style.overflow = (wizardOffen || sheetOffen) ? 'hidden' : '';
+}
+
+function wizardInhaltHTML(schritt) {
+  if (schritt === 'personen') {
+    return '<div class="editform">' + personenFelderHTML() +
+      '<p class="note">Die Namen lassen sich jederzeit unter „Mehr" ändern.</p></div>';
+  }
+  if (schritt === 'einnahmen') {
+    const liste = dok.einnahmen.filter((e) => e.aktiv);
+    return '<div class="liste">' +
+      (liste.length ? liste.map(einnahmeZeileHTML).join('') : '<p class="leer">Noch keine Einnahmen erfasst.</p>') +
+      '</div><div class="btns"><button type="button" data-action="einnahme-neu">+ hinzufügen</button></div>';
+  }
+  const liste = dok.budgetposten.filter((p) => p.aktiv);
+  return '<div class="liste">' +
+    (liste.length ? liste.map(postenZeileHTML).join('') : '<p class="leer">Noch keine Kostenstellen erfasst.</p>') +
+    '</div><div class="btns"><button type="button" data-action="posten-neu">+ hinzufügen</button></div>';
+}
+
+function renderWizardSchritt() {
+  const schritt = WIZARD_SCHRITTE[wizardSchritt];
+  $('wizard-fortschritt').textContent = 'Schritt ' + (wizardSchritt + 1) + ' von ' + WIZARD_SCHRITTE.length;
+  $('wizard-titel').textContent = WIZARD_TITEL[schritt];
+  $('wizard-inhalt').innerHTML = wizardInhaltHTML(schritt);
+  $('wizard-primaer').textContent = wizardSchritt === WIZARD_SCHRITTE.length - 1 ? 'Fertig' : 'Weiter';
+  $('wizard-zurueck').hidden = wizardSchritt === 0;
+}
+
+function wizardOeffnen() {
+  clearTimeout(wizardAufraeumTimer);
+  wizardOffen = true;
+  wizardSchritt = 0;
+  renderWizardSchritt();
+  aktualisiereScrollSperre();
+  const overlay = $('wizard-overlay');
+  overlay.classList.add('sichtbar');
+  overlay.getBoundingClientRect(); /* Reflow erzwingen, damit die Transition greift */
+  requestAnimationFrame(() => requestAnimationFrame(() => overlay.classList.add('offen')));
+}
+
+function wizardSchliessen(abgeschlossen) {
+  if (!wizardOffen) return;
+  const overlay = $('wizard-overlay'), sheet = $('wizard-sheet');
+  wizardOffen = false;
+  overlay.classList.remove('offen');
+  clearTimeout(wizardAufraeumTimer);
+  const aufraeumen = () => {
+    clearTimeout(wizardAufraeumTimer);
+    overlay.classList.remove('sichtbar');
+    aktualisiereScrollSperre();
+  };
+  if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+    aufraeumen();
+  } else {
+    sheet.addEventListener('transitionend', aufraeumen, { once: true });
+    wizardAufraeumTimer = setTimeout(aufraeumen, 400);
+  }
+  if (abgeschlossen) zeigeToast('Eingerichtet');
+}
+
+function wizardWeiter() {
+  if (wizardSchritt >= WIZARD_SCHRITTE.length - 1) { wizardSchliessen(true); return; }
+  wizardSchritt++;
+  renderWizardSchritt();
+}
+
+function wizardZurueck() {
+  if (wizardSchritt === 0) return;
+  wizardSchritt--;
+  renderWizardSchritt();
+}
 
 /* ---------- Bausteine fuer HTML ---------- */
 
@@ -1325,12 +1444,18 @@ function topfFormHTML(t) {
     '</div>';
 }
 
-function renderMehr() {
-  $('personen-felder').innerHTML = dok.personen.map((p) =>
+/* Wird sowohl in "Mehr" als auch im Einstiegs-Assistenten (Schritt
+   "Personen") verwendet, damit dieselbe Eingabe an beiden Stellen steht. */
+function personenFelderHTML() {
+  return dok.personen.map((p) =>
     '<div class="feld"><label>' + (p.id === 'p1' ? 'Person 1' : 'Person 2') + '</label>' +
     '<input type="text" data-entity="person" data-id="' + p.id + '" data-feld="name" value="' +
     escapeHtml(p.name) + '" placeholder="Name" autocomplete="off"></div>'
   ).join('');
+}
+
+function renderMehr() {
+  $('personen-felder').innerHTML = personenFelderHTML();
 
   $('umschalt-mehr').textContent = 'Inaktive: ' + (inaktiveSichtbar.mehr ? 'ein' : 'aus');
   const toepfeListe = dok.toepfe.filter((t) => inaktiveSichtbar.mehr || t.aktiv);
@@ -1524,12 +1649,17 @@ function behandeln(action, el) {
     case 'sicherung-teilen': sicherungTeilen(); break;
     case 'sicherung-herunterladen': sicherungHerunterladen(); break;
     case 'sicherung-kopieren': sicherungKopieren(); break;
+    case 'wizard-oeffnen': wizardOeffnen(); break;
+    case 'wizard-schliessen': wizardSchliessen(false); break;
+    case 'wizard-weiter': wizardWeiter(); break;
+    case 'wizard-zurueck': wizardZurueck(); break;
   }
 }
 
 document.addEventListener('click', (e) => {
   if (e.target.id === 'info-overlay') { infoSchliessen(); return; }
   if (e.target.id === 'sheet-overlay') { sheetVerwerfen(); return; }
+  if (e.target.id === 'wizard-overlay') { wizardSchliessen(false); return; }
   const el = e.target.closest('[data-action]');
   if (el) behandeln(el.dataset.action, el);
 });
@@ -1558,6 +1688,7 @@ $('sicherung-datei').addEventListener('change', (e) => {
       if (!roh || typeof roh !== 'object') throw new Error('Unerwarteter Inhalt');
       dok = migrieren(roh);
       if (sheetOffen) sheetSchliessen();
+      if (wizardOffen) wizardSchliessen(false);
       uebersichtMonat = clampMonat(monatHeute());
       renderAlles(); sichern();
       log('Sicherung geladen: ' + f.name);
@@ -1676,6 +1807,7 @@ lesen()
     log(d ? 'Bestehende Daten geladen.' : 'Keine Daten gefunden, neu begonnen.');
     uebersichtMonat = clampMonat(monatHeute());
     renderAlles();
+    if (!dok.personen[0].name && !dok.personen[1].name) wizardOeffnen(); /* allererster Start */
     return schreiben(dok).then(
       () => befund('speicher', true, 'liest, schreibt'),
       (e) => { befund('speicher', false, 'nur lesen'); log('Schreibprobe fehlgeschlagen: ' + e); }
