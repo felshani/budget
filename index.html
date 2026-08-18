@@ -1152,10 +1152,20 @@ function aktualisiereScrollSperre() {
    normalen Erfassen-Sheet ausserhalb des Assistenten weiterhin vorhanden,
    siehe einnahmeFormHTML/postenFormHTML — diese hier sind bewusst
    eigenstaendig, keine Variante derselben Funktion). */
+/* Ob fuer dieselbe Person bereits eine aktive Einnahme "13. Monatslohn"
+   existiert — lockere Verknuepfung ueber Konvention (Art + Person), kein
+   Fremdschluessel, siehe wizardEinnahme13tesUmschalten(). */
+function wizardHat13tenMonatslohn(e) {
+  return dok.einnahmen.some((x) => x.aktiv && x.art === '13. Monatslohn' && x.personId === e.personId);
+}
+
 function wizardEinnahmeFormHTML(e) {
   return '<div class="editform">' +
     feldHTML('Art', 'text', 'einnahme', e.id, 'art', e.art, { list: 'einnahmenarten' }) +
     '<div class="wizard-betrag">' + feldHTML('Betrag (CHF)', 'number', 'einnahme', e.id, 'betrag', e.betrag, { step: '0.05' }) + '</div>' +
+    (e.art === 'Nettolohn' ? '<div class="wizard-aktiv-zeile" style="justify-content:flex-start">' +
+      '<label class="wizard-aktiv-label"><input type="checkbox" data-action="wizard-einnahme-13tes" data-id="' + e.id + '"' +
+      (wizardHat13tenMonatslohn(e) ? ' checked' : '') + '> Zusätzlich 13. Monatslohn erfassen</label></div>' : '') +
     auswahlHTML('Person', 'einnahme', e.id, 'personId', e.personId, dok.personen.map((p) => [p.id, personName(p.id)])) +
     auswahlHTML('Rhythmus', 'einnahme', e.id, 'rhythmus', e.rhythmus, RHYTHMEN) +
     (e.rhythmus === 'monatlich' ? '' :
@@ -1202,12 +1212,14 @@ function wizardInhaltHTML(schritt) {
   if (!liste.length) {
     return hinzufuegenHTML + '<p class="leer">Noch keine ' + (istEinnahmen ? 'Einnahmen' : 'Kostenstellen') + ' erfasst.</p>';
   }
-  const item = liste[Math.min(wizardUnterindex, liste.length - 1)];
+  const letzterIndex = liste.length - 1;
+  const aktuellerIndex = Math.min(wizardUnterindex, letzterIndex);
+  const item = liste[aktuellerIndex];
   const formHtml = istEinnahmen ? wizardEinnahmeFormHTML(item)
     : wizardPostenFormHTML(item, dok.kategorien.find((k) => k.id === item.kategorieId) || { name: '', gruppe: '' });
   const hinweis = istEinnahmen ? '' :
     '<p class="note" style="margin-bottom:12px">Gängige Positionen wurden vorausgefüllt. Nicht Zutreffendes über „aktiv" abwählen.</p>';
-  return hinweis + hinzufuegenHTML + formHtml;
+  return hinweis + (aktuellerIndex === letzterIndex ? hinzufuegenHTML : '') + formHtml;
 }
 
 let wizardUnterindex = 0;
@@ -1347,6 +1359,33 @@ function wizardNeuerPosten() {
 function wizardFokussiere(entity, id, feld) {
   const el = document.querySelector('#wizard-inhalt [data-entity="' + entity + '"][data-id="' + id + '"][data-feld="' + feld + '"]');
   if (el) { el.focus(); el.scrollIntoView({ block: 'center' }); }
+}
+
+/* Legt beim Ankreuzen eine zweite Einnahme "13. Monatslohn" an (oder
+   reaktiviert eine bereits vorhandene) und springt dorthin; beim
+   Abhaken wird sie deaktiviert statt hart geloescht (Regel 5). Keine
+   Aenderung an den Rechenregeln — jaehrlich/Dezember wird von
+   betragGeglaettet/betragFaellig bereits korrekt behandelt. */
+function wizardEinnahme13tesUmschalten(nettolohnId, angehakt) {
+  const nettolohn = findeObjekt('einnahme', nettolohnId);
+  if (!nettolohn) return;
+  let comp = dok.einnahmen.find((x) => x.art === '13. Monatslohn' && x.personId === nettolohn.personId);
+  if (angehakt) {
+    if (comp) {
+      setzeAktiv('einnahme', comp.id, true);
+    } else {
+      comp = neueEinnahmeObjekt();
+      comp.art = '13. Monatslohn'; comp.personId = nettolohn.personId; comp.betrag = nettolohn.betrag;
+      comp.rhythmus = 'jaehrlich'; comp.faelligMonate = [12];
+      dok.einnahmen.push(comp);
+      sichern(); renderAktuellerTab();
+    }
+    wizardUnterindex = dok.einnahmen.indexOf(comp);
+    renderWizardSchritt();
+    wizardFokussiere('einnahme', comp.id, 'betrag');
+  } else if (comp) {
+    setzeAktiv('einnahme', comp.id, false);
+  }
 }
 
 /* ---------- Bausteine fuer HTML ---------- */
@@ -1912,6 +1951,7 @@ function behandeln(action, el) {
     case 'wizard-einnahme-neu': wizardNeueEinnahme(); break;
     case 'wizard-posten-neu': wizardNeuerPosten(); break;
     case 'wizard-posten-umschalten-aktiv': setzeAktiv('budgetposten', d.id, el.checked); break;
+    case 'wizard-einnahme-13tes': wizardEinnahme13tesUmschalten(d.id, el.checked); break;
   }
 }
 
@@ -1934,6 +1974,10 @@ document.addEventListener('change', (e) => {
   const el = e.target.closest('[data-feld]');
   if (!el) return;
   if (el.tagName === 'SELECT' || el.type === 'month' || el.type === 'date') feldGeaendert(el, true);
+  /* Ausnahme: die Art einer Einnahme steuert im Assistenten, ob die
+     "13. Monatslohn"-Checkbox erscheint — beim Verlassen des Feldes
+     (nicht bei jedem Tastendruck) soll das sofort sichtbar werden. */
+  else if (el.dataset.entity === 'einnahme' && el.dataset.feld === 'art') feldGeaendert(el, true);
   else if (el.tagName === 'INPUT') feldGeaendert(el, false);
 });
 
