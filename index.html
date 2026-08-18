@@ -92,6 +92,9 @@ input[type=text],input[type=number],input[type=month],input[type=date],select{
   background:var(--paper);color:var(--ink);
 }
 select{font-family:var(--sans);-webkit-appearance:none;appearance:none}
+/* Monospace ist fuer Zahlen gedacht (DESIGN.md) — Namen und Bezeichnungen
+   stehen in der Proportionalschrift. */
+input[type=text]{font-family:var(--sans)}
 .info-knopf{background:transparent;border:0;color:var(--ink-soft);font-size:13px;
   padding:0 0 0 4px;cursor:pointer;vertical-align:1px}
 input:focus-visible,button:focus-visible,select:focus-visible{outline:2px solid var(--ok);outline-offset:2px}
@@ -350,7 +353,7 @@ nav.tabbar button:active{opacity:.7}
         <button type="button" class="ghost" data-action="wizard-oeffnen">Assistent erneut starten</button>
       </section>
 
-      <section>
+      <section class="plain">
         <h2>Personen</h2>
         <div id="personen-felder" style="display:flex;flex-direction:column;gap:12px"></div>
       </section>
@@ -381,6 +384,14 @@ nav.tabbar button:active{opacity:.7}
         </div>
         <label for="sicherung-datei">Sicherung wiederherstellen</label>
         <input type="file" id="sicherung-datei" accept="application/json,.json">
+      </section>
+
+      <section class="plain">
+        <h2>Alle Daten zurücksetzen</h2>
+        <p class="note warn" style="margin-bottom:12px">Löscht Personen, Einnahmen, Kostenstellen, Konten und Investments unwiderruflich. Vorher sichern.</p>
+        <div class="btns" style="margin:0">
+          <button type="button" class="ghost" data-action="alles-zuruecksetzen">Alle Daten zurücksetzen</button>
+        </div>
       </section>
 
       <section class="plain">
@@ -834,6 +845,12 @@ function feldGeaendert(el, renderNeeded) {
   if (el.type === 'checkbox') val = el.checked;
   setzeFeld(obj, feld, val);
   if (entity === 'topf' && feld.startsWith('verteilschluessel.')) obj.verteilschluessel.bestaetigtAm = heutedatum();
+  /* Ein 13. Monatslohn ist per Definition ein Monatslohn — er wird nie
+     separat erfasst, sondern zieht mit dem Nettolohn mit. */
+  if (entity === 'einnahme' && feld === 'betrag' && obj.art === 'Nettolohn') {
+    const comp = dok.einnahmen.find((x) => x.aktiv && x.art === '13. Monatslohn' && x.personId === obj.personId);
+    if (comp) comp.betrag = obj.betrag;
+  }
   sichern();
   if (renderNeeded) renderAktuellerTab();
 }
@@ -1054,6 +1071,7 @@ let wizardOffen = false;
 let wizardSchritt = 0;
 let wizardAufraeumTimer = null;
 let wizardVorlageEingefuegt = false;
+let wizardEinnahmenVorlageEingefuegt = false;
 
 /* Gaengige Kostenstellen eines Schweizer Zweipersonenhaushalts, rein
    strukturell (kein Anbieter-/Produktname, kein Personenname, kein
@@ -1152,20 +1170,37 @@ function aktualisiereScrollSperre() {
    normalen Erfassen-Sheet ausserhalb des Assistenten weiterhin vorhanden,
    siehe einnahmeFormHTML/postenFormHTML — diese hier sind bewusst
    eigenstaendig, keine Variante derselben Funktion). */
-/* Ob fuer dieselbe Person bereits eine aktive Einnahme "13. Monatslohn"
-   existiert — lockere Verknuepfung ueber Konvention (Art + Person), kein
+/* Die aktive Begleit-Einnahme "13. Monatslohn" derselben Person, falls
+   vorhanden — lockere Verknuepfung ueber Konvention (Art + Person), kein
    Fremdschluessel, siehe wizardEinnahme13tesUmschalten(). */
-function wizardHat13tenMonatslohn(e) {
-  return dok.einnahmen.some((x) => x.aktiv && x.art === '13. Monatslohn' && x.personId === e.personId);
+function wizard13tesVon(e) {
+  return dok.einnahmen.find((x) => x.aktiv && x.art === '13. Monatslohn' && x.personId === e.personId);
+}
+
+/* Kreuz und Auszahlungsmonat stehen beide auf der Nettolohn-Seite; die
+   Begleit-Einnahme selbst bekommt bewusst keine eigene Seite und keinen
+   eigenen Betrag (siehe wizardAktuelleListe und feldGeaendert). */
+function wizard13tesHTML(e) {
+  const comp = wizard13tesVon(e);
+  let html = '<div class="wizard-aktiv-zeile" style="justify-content:flex-start">' +
+    '<label class="wizard-aktiv-label"><input type="checkbox" data-action="wizard-einnahme-13tes" data-id="' + e.id + '"' +
+    (comp ? ' checked' : '') + '> 13. Monatslohn</label></div>';
+  if (comp) {
+    const gewaehlt = (comp.faelligMonate && comp.faelligMonate[0]) || 12;
+    html += '<div class="feld"><label>Auszahlung des 13. Monatslohns</label>' +
+      '<select data-action="wizard-13tes-monat" data-id="' + comp.id + '">' +
+      MONATSNAMEN.map((n, i) => '<option value="' + (i + 1) + '"' +
+        (gewaehlt === i + 1 ? ' selected' : '') + '>' + n + '</option>').join('') +
+      '</select></div>';
+  }
+  return html;
 }
 
 function wizardEinnahmeFormHTML(e) {
   return '<div class="editform">' +
     feldHTML('Art', 'text', 'einnahme', e.id, 'art', e.art, { list: 'einnahmenarten' }) +
     '<div class="wizard-betrag">' + feldHTML('Betrag (CHF)', 'number', 'einnahme', e.id, 'betrag', e.betrag, { step: '0.05' }) + '</div>' +
-    (e.art === 'Nettolohn' ? '<div class="wizard-aktiv-zeile" style="justify-content:flex-start">' +
-      '<label class="wizard-aktiv-label"><input type="checkbox" data-action="wizard-einnahme-13tes" data-id="' + e.id + '"' +
-      (wizardHat13tenMonatslohn(e) ? ' checked' : '') + '> Zusätzlich 13. Monatslohn erfassen</label></div>' : '') +
+    (e.art === 'Nettolohn' ? wizard13tesHTML(e) : '') +
     auswahlHTML('Person', 'einnahme', e.id, 'personId', e.personId, dok.personen.map((p) => [p.id, personName(p.id)])) +
     auswahlHTML('Rhythmus', 'einnahme', e.id, 'rhythmus', e.rhythmus, RHYTHMEN) +
     (e.rhythmus === 'monatlich' ? '' :
@@ -1174,13 +1209,34 @@ function wizardEinnahmeFormHTML(e) {
     '</div>';
 }
 
+/* Kategorien, deren Gruppe gerade als Freitext erfasst wird ("Neue
+   Gruppe …" gewaehlt) — eine feste Auswahlliste allein wuerde neue
+   Gruppen verunmoeglichen (CLAUDE.md: alles Nutzerdefinierte ist Daten). */
+const wizardGruppeFreitext = new Set();
+
+function wizardGruppeHTML(k) {
+  if (wizardGruppeFreitext.has(k.id)) {
+    return '<div class="feld"><label>Gruppe</label>' +
+      '<input type="text" data-entity="kategorie" data-id="' + k.id + '" data-feld="gruppe" value="' +
+      escapeHtml(k.gruppe || '') + '" autocomplete="off">' +
+      '<div class="btns" style="margin:8px 0 0"><button type="button" class="ghost klein" data-action="wizard-gruppe-liste" data-id="' +
+      k.id + '">Aus Liste wählen</button></div></div>';
+  }
+  const bekannt = Array.from(new Set([...GRUPPEN_VORSCHLAEGE, ...dok.kategorien.map((x) => x.gruppe).filter(Boolean)]))
+    .sort((a, b) => a.localeCompare(b, 'de-CH'));
+  const opts = (k.gruppe ? '' : '<option value="" selected>— bitte wählen —</option>') +
+    bekannt.map((g) => '<option value="' + escapeHtml(g) + '"' + (g === k.gruppe ? ' selected' : '') + '>' + escapeHtml(g) + '</option>').join('') +
+    '<option value="__neu">Neue Gruppe …</option>';
+  return '<div class="feld"><label>Gruppe</label><select data-action="wizard-gruppe-wahl" data-id="' + k.id + '">' + opts + '</select></div>';
+}
+
 function wizardPostenFormHTML(p, k) {
   return '<div class="wizard-aktiv-zeile"><label class="wizard-aktiv-label">' +
     '<input type="checkbox" data-action="wizard-posten-umschalten-aktiv" data-id="' + p.id + '"' + (p.aktiv ? ' checked' : '') + '> aktiv</label></div>' +
     '<div class="editform">' +
     feldHTML('Bezeichnung', 'text', 'kategorie', k.id, 'name', k.name) +
     '<div class="wizard-betrag">' + feldHTML('Betrag (CHF)', 'number', 'budgetposten', p.id, 'betrag', p.betrag, { step: '0.05' }) + '</div>' +
-    feldHTML('Gruppe', 'text', 'kategorie', k.id, 'gruppe', k.gruppe, { list: 'gruppen-vorschlaege' }) +
+    wizardGruppeHTML(k) +
     auswahlHTML('Kostenart', 'budgetposten', p.id, 'kostenart', p.kostenart,
       [['D', 'D — Dauerauftrag'], ['R', 'R — Rückstellung'], ['V', 'V — Variabel']]) +
     auswahlHTML('Träger', 'budgetposten', p.id, 'traeger', p.traeger, null, traegerOptionsHTML(p.traeger)) +
@@ -1192,11 +1248,28 @@ function wizardPostenFormHTML(p, k) {
 }
 
 /* Liste des aktuellen Schritts, sofern er Unter-Seiten hat (Personen
-   nicht — dort gibt es immer nur die zwei festen Felder). */
+   nicht — dort gibt es immer nur die zwei festen Felder). Der 13.
+   Monatslohn bekommt bewusst keine eigene Seite: er wird als blosses
+   Kreuz auf der zugehoerigen Nettolohn-Seite gefuehrt. */
 function wizardAktuelleListe(schritt) {
-  if (schritt === 'einnahmen') return dok.einnahmen;
+  if (schritt === 'einnahmen') return dok.einnahmen.filter((e) => e.art !== '13. Monatslohn');
   if (schritt === 'kostenstellen') return dok.budgetposten;
   return null;
+}
+
+/* Legt beim ersten Erreichen des Einnahmen-Schritts je Person eine leere
+   Nettolohn-Zeile an, damit direkt nach dem Lohn von Person 1 der Lohn
+   von Person 2 abgefragt wird. Ergaenzt nur Fehlendes. */
+function wizardEinnahmenVorlageEinfuegen() {
+  let eingefuegt = 0;
+  dok.personen.forEach((p) => {
+    if (dok.einnahmen.some((e) => e.aktiv && e.art === 'Nettolohn' && e.personId === p.id)) return;
+    const e = neueEinnahmeObjekt();
+    e.art = 'Nettolohn'; e.personId = p.id;
+    dok.einnahmen.push(e);
+    eingefuegt++;
+  });
+  return eingefuegt;
 }
 
 function wizardInhaltHTML(schritt) {
@@ -1231,6 +1304,10 @@ function renderWizardSchritt() {
     wizardVorlageEingefuegt = true;
     if (wizardVorlageEinfuegenFehlende() > 0) { sichern(); renderAktuellerTab(); }
   }
+  if (schritt === 'einnahmen' && !wizardEinnahmenVorlageEingefuegt) {
+    wizardEinnahmenVorlageEingefuegt = true;
+    if (wizardEinnahmenVorlageEinfuegen() > 0) { sichern(); renderAktuellerTab(); }
+  }
   const liste = wizardAktuelleListe(schritt);
   $('wizard-fortschritt').textContent = (liste && liste.length)
     ? (schritt === 'einnahmen' ? 'Einnahme ' : 'Kostenstelle ') + (Math.min(wizardUnterindex, liste.length - 1) + 1) + ' von ' + liste.length
@@ -1256,6 +1333,8 @@ function wizardOeffnen() {
   wizardSchritt = 0;
   wizardUnterindex = 0;
   wizardVorlageEingefuegt = false;
+  wizardEinnahmenVorlageEingefuegt = false;
+  wizardGruppeFreitext.clear();
   wizardLetzteSeite = null;
   renderWizardSchritt();
   aktualisiereScrollSperre();
@@ -1341,7 +1420,7 @@ function wizardNeueEinnahme() {
   const e = neueEinnahmeObjekt();
   dok.einnahmen.push(e);
   sichern();
-  wizardUnterindex = dok.einnahmen.length - 1;
+  wizardUnterindex = wizardAktuelleListe('einnahmen').length - 1;
   renderWizardSchritt();
   wizardFokussiere('einnahme', e.id, 'art');
 }
@@ -1380,12 +1459,39 @@ function wizardEinnahme13tesUmschalten(nettolohnId, angehakt) {
       dok.einnahmen.push(comp);
       sichern(); renderAktuellerTab();
     }
-    wizardUnterindex = dok.einnahmen.indexOf(comp);
-    renderWizardSchritt();
-    wizardFokussiere('einnahme', comp.id, 'betrag');
+    renderWizardSchritt(); /* bleibt auf der Nettolohn-Seite, zeigt nur die Monatswahl dazu */
   } else if (comp) {
     setzeAktiv('einnahme', comp.id, false);
   }
+}
+
+/* Auszahlungsmonat des 13. Monatslohns, gesetzt von der Nettolohn-Seite. */
+function wizard13tesMonatGewaehlt(el) {
+  const comp = findeObjekt('einnahme', el.dataset.id);
+  if (!comp) return;
+  comp.faelligMonate = [Number(el.value)];
+  sichern(); renderAktuellerTab();
+}
+
+/* Gruppen-Auswahl im Assistenten: "__neu" darf nie ins Datenmodell,
+   sondern schaltet diese Kategorie auf Freitext um. */
+function wizardGruppeGewaehlt(el) {
+  const k = findeObjekt('kategorie', el.dataset.id);
+  if (!k) return;
+  if (el.value === '__neu') {
+    wizardGruppeFreitext.add(k.id);
+    k.gruppe = '';
+    sichern(); renderWizardSchritt();
+    wizardFokussiere('kategorie', k.id, 'gruppe');
+    return;
+  }
+  k.gruppe = el.value;
+  sichern(); renderAktuellerTab();
+}
+
+function wizardGruppeListe(id) {
+  wizardGruppeFreitext.delete(id);
+  renderWizardSchritt();
 }
 
 /* ---------- Bausteine fuer HTML ---------- */
@@ -1869,6 +1975,19 @@ function sicherungHerunterladen() {
   log('Gespeichert: ' + datei.name);
 }
 
+/* Setzt das ganze Dokument zurueck — bewusst nur ueber eine ausdrueckliche
+   Rueckfrage erreichbar, gedacht zum Testen des Einstiegs. */
+function allesZuruecksetzen() {
+  if (!confirm('Wirklich alle Daten löschen? Personen, Einnahmen, Kostenstellen, Konten und Investments werden unwiderruflich entfernt.')) return;
+  if (sheetOffen) sheetSchliessen();
+  if (wizardOffen) wizardSchliessen(false);
+  dok = leeresDokument();
+  uebersichtMonat = clampMonat(monatHeute());
+  renderAlles(); sichern();
+  zeigeToast('Zurückgesetzt');
+  log('Alle Daten zurückgesetzt.');
+}
+
 function sicherungKopieren() {
   const text = JSON.stringify(dok, null, 2);
   if (navigator.clipboard && navigator.clipboard.writeText) {
@@ -1952,6 +2071,8 @@ function behandeln(action, el) {
     case 'wizard-posten-neu': wizardNeuerPosten(); break;
     case 'wizard-posten-umschalten-aktiv': setzeAktiv('budgetposten', d.id, el.checked); break;
     case 'wizard-einnahme-13tes': wizardEinnahme13tesUmschalten(d.id, el.checked); break;
+    case 'wizard-gruppe-liste': wizardGruppeListe(d.id); break;
+    case 'alles-zuruecksetzen': allesZuruecksetzen(); break;
   }
 }
 
@@ -1971,6 +2092,12 @@ document.addEventListener('input', (e) => {
 document.addEventListener('change', (e) => {
   const mEl = e.target.closest('[data-monatfeld]');
   if (mEl) { monatJahrGeaendert(mEl); return; }
+  /* Assistenten-Auswahlfelder ohne data-feld: der gewaehlte Wert wird
+     nicht direkt in ein Datenfeld geschrieben (siehe Handler). */
+  const gEl = e.target.closest('[data-action="wizard-gruppe-wahl"]');
+  if (gEl) { wizardGruppeGewaehlt(gEl); return; }
+  const mmEl = e.target.closest('[data-action="wizard-13tes-monat"]');
+  if (mmEl) { wizard13tesMonatGewaehlt(mmEl); return; }
   const el = e.target.closest('[data-feld]');
   if (!el) return;
   if (el.tagName === 'SELECT' || el.type === 'month' || el.type === 'date') feldGeaendert(el, true);
