@@ -235,13 +235,13 @@ nav.tabbar button:active{opacity:.7}
 .wizard-fuss .sheet-primaer{flex:1}
 .wizard-zurueck-knopf{flex:0 0 auto;min-width:112px;min-height:52px;border-radius:16px;font-size:16px;font-weight:600}
 
-/* Schritte "Einnahmen"/"Kostenstellen": jede Einnahme/Kostenstelle als
-   eigenes Fenster direkt im Schritt (Online-Formular statt Sheet-Umweg). */
-.wizard-karte{margin-bottom:16px}
-.wizard-karte:last-of-type{margin-bottom:0}
-.wizard-karte.inaktiv{opacity:.55}
-.wizard-karte-kopf{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:8px}
-.wizard-karte-kopf h4{margin:0}
+/* Schritte "Einnahmen"/"Kostenstellen": eine Position nach der anderen,
+   wie die Top-Level-Schritte selbst (siehe wizardUnterindex). Das Betrag-
+   Feld ist bewusst das groesste/wichtigste Feld auf der Seite. */
+.wizard-betrag input{font-size:32px;font-weight:650;text-align:center;
+  padding:16px 12px;border-radius:14px;font-family:var(--mono)}
+.wizard-betrag label{text-align:center;font-size:13px}
+.wizard-aktiv-zeile{display:flex;justify-content:flex-end;margin:0 0 12px}
 .wizard-aktiv-label{display:flex;align-items:center;gap:6px;font-size:12.5px;color:var(--ink-soft);font-weight:600;white-space:nowrap}
 
 /* Kurze Bestaetigung nach dem Speichern, DESIGN.md: "keine Erfolgsseite" */
@@ -1146,32 +1146,72 @@ function aktualisiereScrollSperre() {
   document.body.style.overflow = (wizardOffen || sheetOffen) ? 'hidden' : '';
 }
 
+/* Schlanke, assistenten-eigene Formulare: Betrag ist bewusst das
+   groesste Feld, Faelligkeitsmonate nur sichtbar, wenn der Rhythmus das
+   ueberhaupt bedeutsam macht, "Gueltig ab/bis" entfaellt ganz (bleibt im
+   normalen Erfassen-Sheet ausserhalb des Assistenten weiterhin vorhanden,
+   siehe einnahmeFormHTML/postenFormHTML — diese hier sind bewusst
+   eigenstaendig, keine Variante derselben Funktion). */
+function wizardEinnahmeFormHTML(e) {
+  return '<div class="editform">' +
+    feldHTML('Art', 'text', 'einnahme', e.id, 'art', e.art, { list: 'einnahmenarten' }) +
+    '<div class="wizard-betrag">' + feldHTML('Betrag (CHF)', 'number', 'einnahme', e.id, 'betrag', e.betrag, { step: '0.05' }) + '</div>' +
+    auswahlHTML('Person', 'einnahme', e.id, 'personId', e.personId, dok.personen.map((p) => [p.id, personName(p.id)])) +
+    auswahlHTML('Rhythmus', 'einnahme', e.id, 'rhythmus', e.rhythmus, RHYTHMEN) +
+    (e.rhythmus === 'monatlich' ? '' :
+      '<div class="feld"><label>Fälligkeitsmonate</label>' + monatsRasterHTML('einnahme', e.id, e.faelligMonate) +
+      '<p class="note" style="margin-top:8px">Monat der tatsächlichen Zahlung.</p></div>') +
+    '</div>';
+}
+
+function wizardPostenFormHTML(p, k) {
+  return '<div class="wizard-aktiv-zeile"><label class="wizard-aktiv-label">' +
+    '<input type="checkbox" data-action="wizard-posten-umschalten-aktiv" data-id="' + p.id + '"' + (p.aktiv ? ' checked' : '') + '> aktiv</label></div>' +
+    '<div class="editform">' +
+    feldHTML('Bezeichnung', 'text', 'kategorie', k.id, 'name', k.name) +
+    '<div class="wizard-betrag">' + feldHTML('Betrag (CHF)', 'number', 'budgetposten', p.id, 'betrag', p.betrag, { step: '0.05' }) + '</div>' +
+    feldHTML('Gruppe', 'text', 'kategorie', k.id, 'gruppe', k.gruppe, { list: 'gruppen-vorschlaege' }) +
+    auswahlHTML('Kostenart', 'budgetposten', p.id, 'kostenart', p.kostenart,
+      [['D', 'D — Dauerauftrag'], ['R', 'R — Rückstellung'], ['V', 'V — Variabel']]) +
+    auswahlHTML('Träger', 'budgetposten', p.id, 'traeger', p.traeger, null, traegerOptionsHTML(p.traeger)) +
+    auswahlHTML('Rhythmus', 'budgetposten', p.id, 'rhythmus', p.rhythmus, RHYTHMEN) +
+    (p.rhythmus === 'monatlich' ? '' :
+      '<div class="feld"><label>Fälligkeitsmonate</label>' + monatsRasterHTML('budgetposten', p.id, p.faelligMonate) +
+      '<p class="note" style="margin-top:8px">Monat der tatsächlichen Zahlung.</p></div>') +
+    '</div>';
+}
+
+/* Liste des aktuellen Schritts, sofern er Unter-Seiten hat (Personen
+   nicht — dort gibt es immer nur die zwei festen Felder). */
+function wizardAktuelleListe(schritt) {
+  if (schritt === 'einnahmen') return dok.einnahmen;
+  if (schritt === 'kostenstellen') return dok.budgetposten;
+  return null;
+}
+
 function wizardInhaltHTML(schritt) {
   if (schritt === 'personen') {
     return '<div class="editform">' + personenFelderHTML() +
       '<p class="note">Die Namen lassen sich jederzeit unter „Mehr" ändern.</p></div>';
   }
-  if (schritt === 'einnahmen') {
-    const liste = dok.einnahmen.filter((e) => e.aktiv);
-    const karten = liste.map((e, i) =>
-      '<section class="wizard-karte"><h4>Einnahme ' + (i + 1) + '</h4>' + einnahmeFormHTML(e) + '</section>').join('');
-    return (karten || '<p class="leer">Noch keine Einnahmen erfasst.</p>') +
-      '<div class="btns"><button type="button" data-action="wizard-einnahme-neu">+ Einnahme hinzufügen</button></div>';
+  const istEinnahmen = schritt === 'einnahmen';
+  const liste = wizardAktuelleListe(schritt);
+  const hinzufuegenHTML = '<div class="btns" style="margin:0 0 16px">' +
+    '<button type="button" class="ghost klein" data-action="' + (istEinnahmen ? 'wizard-einnahme-neu' : 'wizard-posten-neu') + '">' +
+    (istEinnahmen ? '+ Einnahme hinzufügen' : '+ Kostenstelle hinzufügen') + '</button></div>';
+  if (!liste.length) {
+    return hinzufuegenHTML + '<p class="leer">Noch keine ' + (istEinnahmen ? 'Einnahmen' : 'Kostenstellen') + ' erfasst.</p>';
   }
-  const liste = dok.budgetposten;
-  const karten = liste.map((p, i) => {
-    const k = dok.kategorien.find((x) => x.id === p.kategorieId) || { name: '', gruppe: '' };
-    return '<section class="wizard-karte' + (p.aktiv ? '' : ' inaktiv') + '">' +
-      '<div class="wizard-karte-kopf"><h4>Kostenstelle ' + (i + 1) + '</h4>' +
-      '<label class="wizard-aktiv-label"><input type="checkbox" data-action="wizard-posten-umschalten-aktiv" data-id="' + p.id + '"' + (p.aktiv ? ' checked' : '') + '> aktiv</label></div>' +
-      postenFormHTML(p, k) + '</section>';
-  }).join('');
-  return '<p class="note" style="margin-bottom:12px">Gängige Positionen eines Schweizer Haushaltsbudgets wurden mit Betrag 0 vorausgefüllt. Nicht Zutreffendes über „aktiv" abwählen, restliche Beträge und Träger anpassen.</p>' +
-    (karten || '<p class="leer">Noch keine Kostenstellen erfasst.</p>') +
-    '<div class="btns"><button type="button" data-action="wizard-posten-neu">+ Kostenstelle hinzufügen</button></div>';
+  const item = liste[Math.min(wizardUnterindex, liste.length - 1)];
+  const formHtml = istEinnahmen ? wizardEinnahmeFormHTML(item)
+    : wizardPostenFormHTML(item, dok.kategorien.find((k) => k.id === item.kategorieId) || { name: '', gruppe: '' });
+  const hinweis = istEinnahmen ? '' :
+    '<p class="note" style="margin-bottom:12px">Gängige Positionen wurden vorausgefüllt. Nicht Zutreffendes über „aktiv" abwählen.</p>';
+  return hinweis + hinzufuegenHTML + formHtml;
 }
 
-let wizardLetzterSchrittIndex = -1;
+let wizardUnterindex = 0;
+let wizardLetzteSeite = null;
 
 function renderWizardSchritt() {
   const schritt = WIZARD_SCHRITTE[wizardSchritt];
@@ -1179,27 +1219,32 @@ function renderWizardSchritt() {
     wizardVorlageEingefuegt = true;
     if (wizardVorlageEinfuegenFehlende() > 0) { sichern(); renderAktuellerTab(); }
   }
-  $('wizard-fortschritt').textContent = 'Schritt ' + (wizardSchritt + 1) + ' von ' + WIZARD_SCHRITTE.length;
+  const liste = wizardAktuelleListe(schritt);
+  $('wizard-fortschritt').textContent = (liste && liste.length)
+    ? (schritt === 'einnahmen' ? 'Einnahme ' : 'Kostenstelle ') + (Math.min(wizardUnterindex, liste.length - 1) + 1) + ' von ' + liste.length
+    : 'Schritt ' + (wizardSchritt + 1) + ' von ' + WIZARD_SCHRITTE.length;
   $('wizard-titel').textContent = WIZARD_TITEL[schritt];
   const inhalt = $('wizard-inhalt');
-  /* Nur beim erneuten Rendern DESSELBEN Schritts (z.B. "aktiv"-Checkbox
-     bei einer von vielen Kostenstellen) die Scrollposition beibehalten —
-     bei echter Navigation (Weiter/Zurueck) faengt der neue Schritt oben an. */
-  const selberSchritt = wizardLetzterSchrittIndex === wizardSchritt;
-  const scrollPos = selberSchritt ? inhalt.scrollTop : 0;
+  /* Nur beim erneuten Rendern DERSELBEN Seite (Schritt + Unterindex, z.B.
+     Rhythmus-Wechsel oder "aktiv"-Checkbox) die Scrollposition behalten —
+     bei echter Navigation faengt die neue Seite oben an. */
+  const seite = wizardSchritt + ':' + (liste ? Math.min(wizardUnterindex, Math.max(liste.length - 1, 0)) : 0);
+  const scrollPos = wizardLetzteSeite === seite ? inhalt.scrollTop : 0;
   inhalt.innerHTML = wizardInhaltHTML(schritt);
   inhalt.scrollTop = scrollPos;
-  wizardLetzterSchrittIndex = wizardSchritt;
-  $('wizard-primaer').textContent = wizardSchritt === WIZARD_SCHRITTE.length - 1 ? 'Fertig' : 'Weiter';
-  $('wizard-zurueck').hidden = wizardSchritt === 0;
+  wizardLetzteSeite = seite;
+  const istLetzteSeite = wizardSchritt === WIZARD_SCHRITTE.length - 1 && (!liste || !liste.length || wizardUnterindex >= liste.length - 1);
+  $('wizard-primaer').textContent = istLetzteSeite ? 'Fertig' : 'Weiter';
+  $('wizard-zurueck').hidden = wizardSchritt === 0 && (!liste || wizardUnterindex === 0);
 }
 
 function wizardOeffnen() {
   clearTimeout(wizardAufraeumTimer);
   wizardOffen = true;
   wizardSchritt = 0;
+  wizardUnterindex = 0;
   wizardVorlageEingefuegt = false;
-  wizardLetzterSchrittIndex = -1;
+  wizardLetzteSeite = null;
   renderWizardSchritt();
   aktualisiereScrollSperre();
   const overlay = $('wizard-overlay');
@@ -1230,16 +1275,38 @@ function wizardSchliessen(abgeschlossen) {
 }
 
 function wizardWeiter() {
+  const schritt = WIZARD_SCHRITTE[wizardSchritt];
+  let liste = wizardAktuelleListe(schritt);
+  if (liste && liste.length) {
+    const entity = schritt === 'einnahmen' ? 'einnahme' : 'budgetposten';
+    const aktuell = liste[Math.min(wizardUnterindex, liste.length - 1)];
+    /* Leere, nie ausgefuellte Seite beim Weiterblattern entfernen — der
+       naechste Eintrag rueckt dabei automatisch an dieselbe Indexposition
+       nach, ein echter Eintrag zaehlt stattdessen normal weiter. */
+    if (istLeer(entity, aktuell)) { hartEntfernen(entity, aktuell.id); sichern(); }
+    else wizardUnterindex++;
+    liste = wizardAktuelleListe(schritt);
+  }
+  if (liste && wizardUnterindex < liste.length) { renderWizardSchritt(); return; }
   if (wizardSchritt >= WIZARD_SCHRITTE.length - 1) { wizardSchliessen(true); return; }
-  wizardLeereAufraeumen();
   wizardSchritt++;
+  wizardUnterindex = 0;
   renderWizardSchritt();
 }
 
 function wizardZurueck() {
+  const schritt = WIZARD_SCHRITTE[wizardSchritt];
+  const liste = wizardAktuelleListe(schritt);
+  if (liste && liste.length) {
+    const entity = schritt === 'einnahmen' ? 'einnahme' : 'budgetposten';
+    const aktuell = liste[Math.min(wizardUnterindex, liste.length - 1)];
+    if (istLeer(entity, aktuell)) { hartEntfernen(entity, aktuell.id); sichern(); }
+  }
+  if (wizardUnterindex > 0) { wizardUnterindex--; renderWizardSchritt(); return; }
   if (wizardSchritt === 0) return;
-  wizardLeereAufraeumen();
   wizardSchritt--;
+  const vorListe = wizardAktuelleListe(WIZARD_SCHRITTE[wizardSchritt]);
+  wizardUnterindex = vorListe && vorListe.length ? vorListe.length - 1 : 0;
   renderWizardSchritt();
 }
 
@@ -1262,6 +1329,7 @@ function wizardNeueEinnahme() {
   const e = neueEinnahmeObjekt();
   dok.einnahmen.push(e);
   sichern();
+  wizardUnterindex = dok.einnahmen.length - 1;
   renderWizardSchritt();
   wizardFokussiere('einnahme', e.id, 'art');
 }
@@ -1271,6 +1339,7 @@ function wizardNeuerPosten() {
   dok.kategorien.push(kat);
   dok.budgetposten.push(posten);
   sichern();
+  wizardUnterindex = dok.budgetposten.length - 1;
   renderWizardSchritt();
   wizardFokussiere('kategorie', kat.id, 'name');
 }
