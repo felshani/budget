@@ -1180,20 +1180,26 @@ function wizard13tesVon(e) {
 /* Kreuz und Auszahlungsmonat stehen beide auf der Nettolohn-Seite; die
    Begleit-Einnahme selbst bekommt bewusst keine eigene Seite und keinen
    eigenen Betrag (siehe wizardAktuelleListe und feldGeaendert). */
+function wizard13tesMonatHTML(comp) {
+  if (!comp) return '';
+  const gewaehlt = (comp.faelligMonate && comp.faelligMonate[0]) || 12;
+  return '<div class="feld"><label>Auszahlung des 13. Monatslohns</label>' +
+    '<select data-action="wizard-13tes-monat" data-id="' + comp.id + '">' +
+    MONATSNAMEN.map((n, i) => '<option value="' + (i + 1) + '"' +
+      (gewaehlt === i + 1 ? ' selected' : '') + '>' + n + '</option>').join('') +
+    '</select></div>';
+}
+
+/* Der Monatsteil steht in einem eigenen Behaelter, damit das Ankreuzen nur
+   diesen austauscht und weder das Kaestchen noch das Betragsfeld anfasst —
+   ein kompletter Neuaufbau wuerde einen noch nicht uebernommenen Wert im
+   fokussierten Feld verwerfen. */
 function wizard13tesHTML(e) {
   const comp = wizard13tesVon(e);
-  let html = '<div class="wizard-aktiv-zeile" style="justify-content:flex-start">' +
+  return '<div class="wizard-aktiv-zeile" style="justify-content:flex-start">' +
     '<label class="wizard-aktiv-label"><input type="checkbox" data-action="wizard-einnahme-13tes" data-id="' + e.id + '"' +
-    (comp ? ' checked' : '') + '> 13. Monatslohn</label></div>';
-  if (comp) {
-    const gewaehlt = (comp.faelligMonate && comp.faelligMonate[0]) || 12;
-    html += '<div class="feld"><label>Auszahlung des 13. Monatslohns</label>' +
-      '<select data-action="wizard-13tes-monat" data-id="' + comp.id + '">' +
-      MONATSNAMEN.map((n, i) => '<option value="' + (i + 1) + '"' +
-        (gewaehlt === i + 1 ? ' selected' : '') + '>' + n + '</option>').join('') +
-      '</select></div>';
-  }
-  return html;
+    (comp ? ' checked' : '') + '> 13. Monatslohn</label></div>' +
+    '<div id="wizard-13tes-monat">' + wizard13tesMonatHTML(comp) + '</div>';
 }
 
 function wizardEinnahmeFormHTML(e) {
@@ -1440,37 +1446,53 @@ function wizardFokussiere(entity, id, feld) {
   if (el) { el.focus(); el.scrollIntoView({ block: 'center' }); }
 }
 
+/* Uebernimmt den Wert des gerade offenen Feldes, bevor eine Aktion etwas
+   neu zeichnet. Safari liefert "change" erst beim Verlassen des Feldes,
+   und dieser Blur geht verloren, sobald der Bereich ersetzt wird — ohne
+   diesen Schritt faellt das Feld auf den alten Stand aus dok zurueck. */
+function wizardFeldUebernehmen() {
+  const el = document.activeElement;
+  if (el && el.dataset && el.dataset.feld && el.closest && el.closest('#wizard-inhalt')) {
+    feldGeaendert(el, false); /* nur speichern, kein Neuaufbau */
+  }
+}
+
 /* Legt beim Ankreuzen eine zweite Einnahme "13. Monatslohn" an (oder
-   reaktiviert eine bereits vorhandene) und springt dorthin; beim
-   Abhaken wird sie deaktiviert statt hart geloescht (Regel 5). Keine
-   Aenderung an den Rechenregeln — jaehrlich/Dezember wird von
-   betragGeglaettet/betragFaellig bereits korrekt behandelt. */
+   reaktiviert eine bereits vorhandene); beim Abhaken wird sie deaktiviert
+   statt hart geloescht (Regel 5). Keine Aenderung an den Rechenregeln —
+   jaehrlich/Dezember wird von betragGeglaettet/betragFaellig bereits
+   korrekt behandelt. Bewusst ohne setzeAktiv() und ohne
+   renderWizardSchritt(): beide wuerden die Seite komplett neu aufbauen und
+   dabei einen getippten, noch nicht uebernommenen Betrag verwerfen. */
 function wizardEinnahme13tesUmschalten(nettolohnId, angehakt) {
   const nettolohn = findeObjekt('einnahme', nettolohnId);
   if (!nettolohn) return;
   let comp = dok.einnahmen.find((x) => x.art === '13. Monatslohn' && x.personId === nettolohn.personId);
   if (angehakt) {
     if (comp) {
-      setzeAktiv('einnahme', comp.id, true);
+      comp.aktiv = true;
     } else {
       comp = neueEinnahmeObjekt();
       comp.art = '13. Monatslohn'; comp.personId = nettolohn.personId; comp.betrag = nettolohn.betrag;
       comp.rhythmus = 'jaehrlich'; comp.faelligMonate = [12];
       dok.einnahmen.push(comp);
-      sichern(); renderAktuellerTab();
     }
-    renderWizardSchritt(); /* bleibt auf der Nettolohn-Seite, zeigt nur die Monatswahl dazu */
   } else if (comp) {
-    setzeAktiv('einnahme', comp.id, false);
+    comp.aktiv = false;
+    comp = null;
   }
+  sichern(); renderNurTab();
+  const behaelter = $('wizard-13tes-monat');
+  if (behaelter) behaelter.innerHTML = wizard13tesMonatHTML(comp);
 }
 
-/* Auszahlungsmonat des 13. Monatslohns, gesetzt von der Nettolohn-Seite. */
+/* Auszahlungsmonat des 13. Monatslohns, gesetzt von der Nettolohn-Seite.
+   Das Select zeigt die Auswahl bereits selbst — kein Neuaufbau noetig. */
 function wizard13tesMonatGewaehlt(el) {
   const comp = findeObjekt('einnahme', el.dataset.id);
   if (!comp) return;
   comp.faelligMonate = [Number(el.value)];
-  sichern(); renderAktuellerTab();
+  sichern(); renderNurTab();
 }
 
 /* Gruppen-Auswahl im Assistenten: "__neu" darf nie ins Datenmodell,
@@ -1486,7 +1508,7 @@ function wizardGruppeGewaehlt(el) {
     return;
   }
   k.gruppe = el.value;
-  sichern(); renderAktuellerTab();
+  sichern(); renderNurTab(); /* Select zeigt die Wahl selbst, kein Neuaufbau */
 }
 
 function wizardGruppeListe(id) {
@@ -2018,6 +2040,12 @@ function renderAktuellerTab() {
   if (wizardOffen) renderWizardSchritt();
 }
 
+/* Frischt nur den (vom Assistenten verdeckten) Tab auf und laesst das
+   Assistenten-Formular unangetastet. Fuer Umschalter auf derselben Seite:
+   ein Neuaufbau wuerde einen getippten, noch nicht uebernommenen Wert im
+   fokussierten Feld durch den alten Stand aus dok ersetzen. */
+function renderNurTab() { RENDERFUNKTIONEN[tabAktuell](); }
+
 function renderAlles() {
   renderUebersicht(); renderBudget(); renderKonten(); renderInvestment(); renderMehr();
   renderStatuszeile(); renderSicherungStatus();
@@ -2069,7 +2097,14 @@ function behandeln(action, el) {
     case 'wizard-zurueck': wizardZurueck(); break;
     case 'wizard-einnahme-neu': wizardNeueEinnahme(); break;
     case 'wizard-posten-neu': wizardNeuerPosten(); break;
-    case 'wizard-posten-umschalten-aktiv': setzeAktiv('budgetposten', d.id, el.checked); break;
+    /* Ohne setzeAktiv(): dessen renderAktuellerTab() wuerde die Seite neu
+       aufbauen und getippte, noch nicht uebernommene Werte verwerfen. Das
+       Kaestchen hat der Browser bereits umgestellt. */
+    case 'wizard-posten-umschalten-aktiv': {
+      const posten = findeObjekt('budgetposten', d.id);
+      if (posten) { posten.aktiv = el.checked; sichern(); renderNurTab(); }
+      break;
+    }
     case 'wizard-einnahme-13tes': wizardEinnahme13tesUmschalten(d.id, el.checked); break;
     case 'wizard-gruppe-liste': wizardGruppeListe(d.id); break;
     case 'alles-zuruecksetzen': allesZuruecksetzen(); break;
@@ -2081,7 +2116,10 @@ document.addEventListener('click', (e) => {
   if (e.target.id === 'sheet-overlay') { sheetVerwerfen(); return; }
   if (e.target.id === 'wizard-overlay') { wizardSchliessen(false); return; }
   const el = e.target.closest('[data-action]');
-  if (el) behandeln(el.dataset.action, el);
+  if (el) {
+    if (wizardOffen) wizardFeldUebernehmen();
+    behandeln(el.dataset.action, el);
+  }
 });
 
 document.addEventListener('input', (e) => {
