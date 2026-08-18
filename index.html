@@ -229,6 +229,21 @@ nav.tabbar button:active{opacity:.7}
 .sheet-sekundaer{display:block;width:100%;background:transparent;border:0;
   color:var(--ink-soft);font-size:14px;padding:12px 0 0;text-align:center}
 
+/* Assistenten-Fuss: Zurueck links, Weiter/Fertig rechts (statt gestapelt
+   wie beim normalen Erfassen-Sheet). */
+.wizard-fuss{display:flex;gap:10px}
+.wizard-fuss .sheet-primaer{flex:1}
+.wizard-zurueck-knopf{flex:0 0 auto;min-width:112px;min-height:52px;border-radius:16px;font-size:16px;font-weight:600}
+
+/* Schritte "Einnahmen"/"Kostenstellen": jede Einnahme/Kostenstelle als
+   eigenes Fenster direkt im Schritt (Online-Formular statt Sheet-Umweg). */
+.wizard-karte{margin-bottom:16px}
+.wizard-karte:last-of-type{margin-bottom:0}
+.wizard-karte.inaktiv{opacity:.55}
+.wizard-karte-kopf{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:8px}
+.wizard-karte-kopf h4{margin:0}
+.wizard-aktiv-label{display:flex;align-items:center;gap:6px;font-size:12.5px;color:var(--ink-soft);font-weight:600;white-space:nowrap}
+
 /* Kurze Bestaetigung nach dem Speichern, DESIGN.md: "keine Erfolgsseite" */
 .toast{
   position:fixed;left:50%;bottom:calc(84px + env(safe-area-inset-bottom));
@@ -445,9 +460,9 @@ nav.tabbar button:active{opacity:.7}
         <h3 class="sheet-titel" id="wizard-titel"></h3>
       </div>
       <div class="sheet-inhalt" id="wizard-inhalt"></div>
-      <div class="sheet-fuss">
+      <div class="sheet-fuss wizard-fuss">
+        <button type="button" class="ghost wizard-zurueck-knopf" id="wizard-zurueck" data-action="wizard-zurueck" hidden>Zurück</button>
         <button type="button" class="sheet-primaer" id="wizard-primaer" data-action="wizard-weiter"></button>
-        <button type="button" class="sheet-sekundaer" id="wizard-zurueck" data-action="wizard-zurueck" hidden>Zurück</button>
       </div>
     </div>
   </div>
@@ -748,25 +763,37 @@ function istLeer(entity, obj) {
 
 /* ---------- Erzeugen ---------- */
 
-function neuerBudgetposten(gruppeVorschlag) {
+/* Reine Datenfunktionen ohne UI-Seiteneffekt, damit sowohl das normale
+   Erfassen-Sheet (Budget-Tab) als auch der Assistent (inline) dieselbe
+   Erzeugung verwenden. */
+function neuerBudgetpostenObjekt(gruppeVorschlag) {
   const kat = { id: neueId(), name: '', gruppe: gruppeVorschlag || '', aktiv: true };
-  dok.kategorien.push(kat);
   const posten = {
     id: neueId(), kategorieId: kat.id, betrag: 0, kostenart: 'V',
     traeger: (dok.toepfe.find((t) => t.aktiv) || dok.personen[0]).id,
     rhythmus: 'monatlich', faelligMonate: [], verteilschluessel: null,
     gueltigAb: dok.einstellungen.startmonat, gueltigBis: null, aktiv: true
   };
+  return { kat, posten };
+}
+
+function neueEinnahmeObjekt() {
+  return {
+    id: neueId(), personId: dok.personen[0].id, art: '', betrag: 0,
+    rhythmus: 'monatlich', faelligMonate: [], gueltigAb: dok.einstellungen.startmonat, gueltigBis: null, aktiv: true
+  };
+}
+
+function neuerBudgetposten(gruppeVorschlag) {
+  const { kat, posten } = neuerBudgetpostenObjekt(gruppeVorschlag);
+  dok.kategorien.push(kat);
   dok.budgetposten.push(posten);
   sichern();
   sheetOeffnenNeu('budgetposten', posten.id);
 }
 
 function neueEinnahme() {
-  const e = {
-    id: neueId(), personId: dok.personen[0].id, art: '', betrag: 0,
-    rhythmus: 'monatlich', faelligMonate: [], gueltigAb: dok.einstellungen.startmonat, gueltigBis: null, aktiv: true
-  };
+  const e = neueEinnahmeObjekt();
   dok.einnahmen.push(e);
   sichern();
   sheetOeffnenNeu('einnahme', e.id);
@@ -935,7 +962,6 @@ function sheetVerwerfen() {
   if (!sheetOffen) return;
   if (sheetOffen.neu) hartEntfernen(sheetOffen.entity, sheetOffen.id);
   sichern(); renderAktuellerTab(); sheetSchliessen();
-  if (wizardOffen) renderWizardSchritt(); /* Liste im Assistenten-Schritt auffrischen */
 }
 
 /* Primaerknopf: bei Neuanlage gleiche Leer-Pruefung wie bisher; beim
@@ -949,7 +975,6 @@ function sheetUebernehmen() {
     if (obj && istLeer(entity, obj)) { hartEntfernen(entity, id); behalten = false; }
   }
   sichern(); renderAktuellerTab(); sheetSchliessen();
-  if (wizardOffen) renderWizardSchritt(); /* Liste im Assistenten-Schritt auffrischen */
   if (behalten) zeigeToast(neu ? 'Hinzugefügt' : 'Gespeichert');
 }
 
@@ -1128,16 +1153,25 @@ function wizardInhaltHTML(schritt) {
   }
   if (schritt === 'einnahmen') {
     const liste = dok.einnahmen.filter((e) => e.aktiv);
-    return '<div class="liste">' +
-      (liste.length ? liste.map(einnahmeZeileHTML).join('') : '<p class="leer">Noch keine Einnahmen erfasst.</p>') +
-      '</div><div class="btns"><button type="button" data-action="einnahme-neu">+ hinzufügen</button></div>';
+    const karten = liste.map((e, i) =>
+      '<section class="wizard-karte"><h4>Einnahme ' + (i + 1) + '</h4>' + einnahmeFormHTML(e) + '</section>').join('');
+    return (karten || '<p class="leer">Noch keine Einnahmen erfasst.</p>') +
+      '<div class="btns"><button type="button" data-action="wizard-einnahme-neu">+ Einnahme hinzufügen</button></div>';
   }
-  const liste = dok.budgetposten.filter((p) => p.aktiv);
-  return '<p class="note" style="margin-bottom:12px">Gängige Positionen eines Schweizer Haushaltsbudgets wurden mit Betrag 0 vorausgefüllt. Nicht Zutreffendes deaktivieren, restliche Beträge und Träger anpassen.</p>' +
-    '<div class="liste">' +
-    (liste.length ? liste.map(postenZeileHTML).join('') : '<p class="leer">Noch keine Kostenstellen erfasst.</p>') +
-    '</div><div class="btns"><button type="button" data-action="posten-neu">+ hinzufügen</button></div>';
+  const liste = dok.budgetposten;
+  const karten = liste.map((p, i) => {
+    const k = dok.kategorien.find((x) => x.id === p.kategorieId) || { name: '', gruppe: '' };
+    return '<section class="wizard-karte' + (p.aktiv ? '' : ' inaktiv') + '">' +
+      '<div class="wizard-karte-kopf"><h4>Kostenstelle ' + (i + 1) + '</h4>' +
+      '<label class="wizard-aktiv-label"><input type="checkbox" data-action="wizard-posten-umschalten-aktiv" data-id="' + p.id + '"' + (p.aktiv ? ' checked' : '') + '> aktiv</label></div>' +
+      postenFormHTML(p, k) + '</section>';
+  }).join('');
+  return '<p class="note" style="margin-bottom:12px">Gängige Positionen eines Schweizer Haushaltsbudgets wurden mit Betrag 0 vorausgefüllt. Nicht Zutreffendes über „aktiv" abwählen, restliche Beträge und Träger anpassen.</p>' +
+    (karten || '<p class="leer">Noch keine Kostenstellen erfasst.</p>') +
+    '<div class="btns"><button type="button" data-action="wizard-posten-neu">+ Kostenstelle hinzufügen</button></div>';
 }
+
+let wizardLetzterSchrittIndex = -1;
 
 function renderWizardSchritt() {
   const schritt = WIZARD_SCHRITTE[wizardSchritt];
@@ -1147,7 +1181,15 @@ function renderWizardSchritt() {
   }
   $('wizard-fortschritt').textContent = 'Schritt ' + (wizardSchritt + 1) + ' von ' + WIZARD_SCHRITTE.length;
   $('wizard-titel').textContent = WIZARD_TITEL[schritt];
-  $('wizard-inhalt').innerHTML = wizardInhaltHTML(schritt);
+  const inhalt = $('wizard-inhalt');
+  /* Nur beim erneuten Rendern DESSELBEN Schritts (z.B. "aktiv"-Checkbox
+     bei einer von vielen Kostenstellen) die Scrollposition beibehalten —
+     bei echter Navigation (Weiter/Zurueck) faengt der neue Schritt oben an. */
+  const selberSchritt = wizardLetzterSchrittIndex === wizardSchritt;
+  const scrollPos = selberSchritt ? inhalt.scrollTop : 0;
+  inhalt.innerHTML = wizardInhaltHTML(schritt);
+  inhalt.scrollTop = scrollPos;
+  wizardLetzterSchrittIndex = wizardSchritt;
   $('wizard-primaer').textContent = wizardSchritt === WIZARD_SCHRITTE.length - 1 ? 'Fertig' : 'Weiter';
   $('wizard-zurueck').hidden = wizardSchritt === 0;
 }
@@ -1157,6 +1199,7 @@ function wizardOeffnen() {
   wizardOffen = true;
   wizardSchritt = 0;
   wizardVorlageEingefuegt = false;
+  wizardLetzterSchrittIndex = -1;
   renderWizardSchritt();
   aktualisiereScrollSperre();
   const overlay = $('wizard-overlay');
@@ -1167,6 +1210,7 @@ function wizardOeffnen() {
 
 function wizardSchliessen(abgeschlossen) {
   if (!wizardOffen) return;
+  wizardLeereAufraeumen();
   const overlay = $('wizard-overlay'), sheet = $('wizard-sheet');
   wizardOffen = false;
   overlay.classList.remove('offen');
@@ -1187,14 +1231,53 @@ function wizardSchliessen(abgeschlossen) {
 
 function wizardWeiter() {
   if (wizardSchritt >= WIZARD_SCHRITTE.length - 1) { wizardSchliessen(true); return; }
+  wizardLeereAufraeumen();
   wizardSchritt++;
   renderWizardSchritt();
 }
 
 function wizardZurueck() {
   if (wizardSchritt === 0) return;
+  wizardLeereAufraeumen();
   wizardSchritt--;
   renderWizardSchritt();
+}
+
+/* Entfernt nie ausgefuellte Einnahmen/Kostenstellen (kein Name/keine Art),
+   die "+ hinzufügen" im Assistenten inline angelegt hat, bevor die
+   bisherige Sheet-Verwerfen-Logik als Sicherheitsnetz das erledigen
+   konnte. Betrifft nie ausgefuellte oder die vorausgefuellten
+   Standard-Kostenstellen (haben immer einen Namen). */
+function wizardLeereAufraeumen() {
+  let geaendert = false;
+  [...dok.einnahmen].forEach((e) => { if (istLeer('einnahme', e)) { hartEntfernen('einnahme', e.id); geaendert = true; } });
+  [...dok.budgetposten].forEach((p) => { if (istLeer('budgetposten', p)) { hartEntfernen('budgetposten', p.id); geaendert = true; } });
+  if (geaendert) sichern();
+}
+
+/* Assistenten-eigene Erzeuger: kein Sheet, Karte erscheint direkt inline
+   im Schritt (wiederverwendet dieselbe Objekterzeugung wie das normale
+   Erfassen-Sheet im Budget-Tab). */
+function wizardNeueEinnahme() {
+  const e = neueEinnahmeObjekt();
+  dok.einnahmen.push(e);
+  sichern();
+  renderWizardSchritt();
+  wizardFokussiere('einnahme', e.id, 'art');
+}
+
+function wizardNeuerPosten() {
+  const { kat, posten } = neuerBudgetpostenObjekt('');
+  dok.kategorien.push(kat);
+  dok.budgetposten.push(posten);
+  sichern();
+  renderWizardSchritt();
+  wizardFokussiere('kategorie', kat.id, 'name');
+}
+
+function wizardFokussiere(entity, id, feld) {
+  const el = document.querySelector('#wizard-inhalt [data-entity="' + entity + '"][data-id="' + id + '"][data-feld="' + feld + '"]');
+  if (el) { el.focus(); el.scrollIntoView({ block: 'center' }); }
 }
 
 /* ---------- Bausteine fuer HTML ---------- */
@@ -1700,7 +1783,13 @@ function renderStatuszeile() {
 
 const RENDERFUNKTIONEN = { uebersicht: renderUebersicht, budget: renderBudget, konten: renderKonten, investment: renderInvestment, mehr: renderMehr };
 
-function renderAktuellerTab() { RENDERFUNKTIONEN[tabAktuell](); }
+/* Haelt auch den sichtbaren Assistenten-Schritt konsistent, falls dieser
+   gerade offen ist — z.B. Faelligkeitsmonate-Raster oder "aktiv"-
+   Checkbox, die inline im Schritt selbst geaendert werden. */
+function renderAktuellerTab() {
+  RENDERFUNKTIONEN[tabAktuell]();
+  if (wizardOffen) renderWizardSchritt();
+}
 
 function renderAlles() {
   renderUebersicht(); renderBudget(); renderKonten(); renderInvestment(); renderMehr();
@@ -1751,6 +1840,9 @@ function behandeln(action, el) {
     case 'wizard-schliessen': wizardSchliessen(false); break;
     case 'wizard-weiter': wizardWeiter(); break;
     case 'wizard-zurueck': wizardZurueck(); break;
+    case 'wizard-einnahme-neu': wizardNeueEinnahme(); break;
+    case 'wizard-posten-neu': wizardNeuerPosten(); break;
+    case 'wizard-posten-umschalten-aktiv': setzeAktiv('budgetposten', d.id, el.checked); break;
   }
 }
 
