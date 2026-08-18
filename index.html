@@ -206,6 +206,13 @@ nav.tabbar button:active{opacity:.7}
   .sheet-overlay.sichtbar .sheet{transition:transform .32s cubic-bezier(.32,.72,0,1)}
 }
 .sheet-overlay.offen .sheet{transform:translateY(0)}
+
+/* Assistent: eigene, fast bildschirmfuellende Auspraegung desselben
+   Bottom-Sheet-Bausteins — hoeher als das kompakte Erfassen-Sheet, damit
+   er als eigenstaendiger, gefuehrter Ablauf statt als kleines Menue
+   wirkt; Hintergrund nur leicht statt kraeftig abgedunkelt. */
+.wizard-sheet{height:92vh;max-height:92vh}
+.wizard-overlay.offen{background:rgba(0,0,0,.25)}
 .sheet-griff{width:36px;height:4px;border-radius:2px;background:var(--rule);margin:10px auto 0;flex:0 0 auto}
 .sheet-kopf{position:relative;display:flex;align-items:center;justify-content:center;
   padding:10px 48px 14px;border-bottom:1px solid var(--rule);flex:0 0 auto}
@@ -429,8 +436,8 @@ nav.tabbar button:active{opacity:.7}
     <div class="info-box" id="info-box"></div>
   </div>
 
-  <div class="sheet-overlay" id="wizard-overlay">
-    <div class="sheet" id="wizard-sheet">
+  <div class="sheet-overlay wizard-overlay" id="wizard-overlay">
+    <div class="sheet wizard-sheet" id="wizard-sheet">
       <div class="sheet-griff" aria-hidden="true"></div>
       <p class="wizard-fortschritt" id="wizard-fortschritt"></p>
       <div class="sheet-kopf">
