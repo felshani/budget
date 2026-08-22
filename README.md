@@ -6,9 +6,18 @@ Spezifikation: `docs/PRD.md`.
 Meilenstein 0 prüfte das Fundament (Installation aufs iPhone, Offline-Betrieb,
 dauerhafter Speicher, Sicherung) — das Prüfblatt dazu ist weiterhin unter dem
 Tab „Mehr“ zu finden. Meilenstein 1 baut darauf die Stammdaten- und
-Budgetverwaltung: Personen, Töpfe, Kategorien, Budgetposten, Einnahmen,
-Konten und Investments anlegen, dazu eine Übersicht mit geplantem Sparbetrag
-und Beitrag je Person und Topf.
+Budgetverwaltung: Personen, Töpfe, Kategorien, Budgetposten und Einnahmen
+anlegen, dazu eine Übersicht mit Sparbetrag und Beitrag je Person und Topf
+sowie erste Auswertungen.
+
+Beim ersten Start führt ein Assistent durch Personen, Einnahmen und
+Kostenstellen. Vier Tabs: **Übersicht** (Einnahmen, Kosten und Sparbetrag,
+umschaltbar zwischen Monat und Jahr), **Budget** (Kostenstellen nach Gruppe
+oder nach Träger, mit Summen), **Analyse** (Diagramme zum Sparverlauf) und
+**Mehr** (Personen, Töpfe, Startmonat, Sicherung, Prüfblatt).
+
+Konten und Investments sind im Datenmodell vorhanden, in der Oberfläche aber
+noch nicht eingeblendet — sie kommen mit den Meilensteinen M3 und M4.
 
 ## Dateien
 

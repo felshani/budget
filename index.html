@@ -125,11 +125,41 @@ button:active{opacity:.72}
 .mark{font-family:var(--mono);font-size:13px;letter-spacing:.02em;font-variant-numeric:tabular-nums;
   text-align:right;white-space:nowrap;color:var(--ink-soft)}
 .mark.ok{color:var(--ok);font-weight:650}
+.mark.stark{color:var(--ink);font-weight:650}
 
-.monatwahl{display:flex;align-items:center;justify-content:center;gap:16px;margin-bottom:16px}
-.monatwahl button{background:transparent;border:1px solid var(--rule);color:var(--ink);width:36px;height:36px;
+/* Gemeinsame Zeitraumwahl ueber Uebersicht, Budget und Analyse */
+.zeitraum{display:flex;flex-direction:column;align-items:center;gap:10px;margin:0 0 18px}
+.zeitraum.aus{display:none}
+.zeitraum .schritt{display:flex;align-items:center;justify-content:center;gap:16px}
+.zeitraum .schritt button{background:transparent;border:1px solid var(--rule);color:var(--ink);width:36px;height:36px;
   border-radius:9px;font-size:17px;padding:0;line-height:1}
-.monatwahl .aktuell{font-weight:650;font-size:15.5px;min-width:150px;text-align:center}
+.zeitraum .aktuell{font-weight:650;font-size:15.5px;min-width:150px;text-align:center}
+
+/* Segmentierter Umschalter (Monat/Jahr, Gruppe/Traeger) */
+.segment{display:inline-flex;border:1px solid var(--rule);border-radius:10px;overflow:hidden;background:var(--card)}
+.segment button{background:transparent;border:0;color:var(--ink-soft);font-size:13px;font-weight:600;
+  padding:8px 16px;border-radius:0;line-height:1.1}
+.segment button.an{background:var(--ok);color:var(--card)}
+.segment.aus{display:none}
+
+/* Summe rechts im Gruppenkopf */
+.kopfsumme{font-family:var(--mono);font-size:13.5px;font-variant-numeric:tabular-nums;
+  color:var(--ink);white-space:nowrap;margin-left:auto}
+.gruppenkopf .kopfsumme + button{margin-left:10px}
+.unterkopf{display:flex;align-items:baseline;gap:10px;margin:14px 0 2px}
+.unterkopf h4{margin:0;flex:0 0 auto}
+.unterkopf .kopfsumme{font-size:12.5px;color:var(--ink-soft)}
+
+/* Diagramme im Analyse-Tab: schlichtes Inline-SVG, keine Bibliothek */
+.diagramm{width:100%;height:auto;display:block;margin:2px 0 4px;overflow:visible}
+.diagramm .achse{stroke:var(--rule);stroke-width:1}
+.diagramm .balken{fill:var(--ok);opacity:.45}
+.diagramm .balken.jetzt{opacity:1}
+.diagramm .flaeche{fill:var(--ok);opacity:.16}
+.diagramm .linie{fill:none;stroke:var(--ok);stroke-width:2;stroke-linejoin:round;stroke-linecap:round}
+.diagramm .punkt{fill:var(--ok)}
+.diagramm text{fill:var(--ink-soft);font-family:var(--sans);font-size:9px}
+.diagramm text.wert{fill:var(--ink);font-family:var(--mono);font-size:9.5px}
 
 /* Abgesetzte Zusammenfassung (z.B. "Total"): bewusst OHNE Kartenrahmen,
    damit sie sich klar von den echten Karten darueber unterscheidet */
@@ -271,47 +301,58 @@ nav.tabbar button:active{opacity:.7}
     </div>
   </header>
 
+  <!-- Gemeinsame Zeitraumwahl fuer Uebersicht, Budget und Analyse -->
+  <div class="zeitraum" id="zeitraum">
+    <div class="segment" id="zeitraum-segment">
+      <button type="button" data-action="sicht" data-sicht="monat">Monat</button>
+      <button type="button" data-action="sicht" data-sicht="jahr">Jahr</button>
+    </div>
+    <div class="schritt">
+      <button type="button" data-action="zeit-zurueck" aria-label="zurück">‹</button>
+      <div class="aktuell" id="zeitraum-label"></div>
+      <button type="button" data-action="zeit-vor" aria-label="vor">›</button>
+    </div>
+  </div>
+
   <main>
 
     <!-- ===================== Uebersicht ===================== -->
     <section class="page active" id="seite-uebersicht" style="background:transparent;border:0;padding:0;margin:0">
-      <div class="monatwahl">
-        <button type="button" data-action="monat-zurueck">‹</button>
-        <div class="aktuell" id="uebersicht-monat"></div>
-        <button type="button" data-action="monat-vor">›</button>
-      </div>
 
       <section class="hero">
-        <p class="hero-label">Geplanter Sparbetrag</p>
+        <p class="hero-label">Sparbetrag</p>
         <p class="hero-zahl" id="hero-zahl"></p>
-        <p class="hero-sub">Fälligkeitssicht</p>
+        <p class="hero-sub" id="hero-sub"></p>
       </section>
 
       <section>
-        <h2>Einnahmen und Kosten</h2>
+        <h2 id="uebersicht-brutto-titel"></h2>
         <div id="uebersicht-brutto"></div>
+        <p class="note" id="uebersicht-brutto-note" style="margin:10px 0 12px"></p>
       </section>
 
-      <section>
-        <h2>Zum Vergleich</h2>
-        <div id="uebersicht-sparbetrag"></div>
-      </section>
-
-      <h2>Beitrag je Topf</h2>
+      <h2 id="uebersicht-toepfe-titel"></h2>
       <div id="uebersicht-toepfe"></div>
 
-      <h2>Je Person</h2>
+      <h2 id="uebersicht-personen-titel"></h2>
       <div id="uebersicht-personen"></div>
     </section>
 
     <!-- ===================== Budget ===================== -->
     <section class="page" id="seite-budget" style="background:transparent;border:0;padding:0;margin:0">
       <div class="tabkopf">
+        <div class="segment" id="budget-segment">
+          <button type="button" data-action="budget-gruppierung" data-gruppierung="gruppe">Nach Gruppe</button>
+          <button type="button" data-action="budget-gruppierung" data-gruppierung="traeger">Nach Träger</button>
+        </div>
         <button type="button" class="ghost klein" data-action="inaktive-umschalten" data-tab="budget" id="umschalt-budget">Inaktive: aus</button>
       </div>
 
       <section>
-        <div class="gruppenkopf"><h3>Einnahmen</h3><button type="button" data-action="einnahme-neu">+ Einnahme</button></div>
+        <div class="gruppenkopf"><h3>Einnahmen</h3>
+          <span class="kopfsumme" id="summe-einnahmen"></span>
+          <button type="button" data-action="einnahme-neu">+ Einnahme</button>
+        </div>
         <div class="liste" id="liste-einnahmen"></div>
       </section>
 
@@ -320,28 +361,9 @@ nav.tabbar button:active{opacity:.7}
       <div class="btns"><button type="button" data-action="posten-neu">+ Neuer Posten</button></div>
     </section>
 
-    <!-- ===================== Konten ===================== -->
-    <section class="page" id="seite-konten" style="background:transparent;border:0;padding:0;margin:0">
-      <div class="tabkopf">
-        <button type="button" class="ghost klein" data-action="inaktive-umschalten" data-tab="konten" id="umschalt-konten">Inaktive: aus</button>
-      </div>
-      <section>
-        <div class="gruppenkopf"><h3>Konten</h3><button type="button" data-action="konto-neu">+ Konto</button></div>
-        <div class="liste" id="liste-konten"></div>
-      </section>
-      <p class="note" style="margin:0 2px 16px">Saldi werden erst in einem späteren Meilenstein monatlich erfasst. Hier stehen nur die Stammdaten.</p>
-    </section>
-
-    <!-- ===================== Investment ===================== -->
-    <section class="page" id="seite-investment" style="background:transparent;border:0;padding:0;margin:0">
-      <div class="tabkopf">
-        <button type="button" class="ghost klein" data-action="inaktive-umschalten" data-tab="investment" id="umschalt-investment">Inaktive: aus</button>
-      </div>
-      <section>
-        <div class="gruppenkopf"><h3>Investments</h3><button type="button" data-action="investment-neu">+ Investment</button></div>
-        <div class="liste" id="liste-investments"></div>
-      </section>
-      <p class="note" style="margin:0 2px 16px">Ist-Werte, Zusatzeinzahlungen und die Renditeprojektion folgen in einem späteren Meilenstein.</p>
+    <!-- ===================== Analyse ===================== -->
+    <section class="page" id="seite-analyse" style="background:transparent;border:0;padding:0;margin:0">
+      <div id="analyse-liste"></div>
     </section>
 
     <!-- ===================== Mehr ===================== -->
@@ -388,7 +410,7 @@ nav.tabbar button:active{opacity:.7}
 
       <section class="plain">
         <h2>Alle Daten zurücksetzen</h2>
-        <p class="note warn" style="margin-bottom:12px">Löscht Personen, Einnahmen, Kostenstellen, Konten und Investments unwiderruflich. Vorher sichern.</p>
+        <p class="note warn" style="margin-bottom:12px">Löscht alle erfassten Daten unwiderruflich: Personen, Einnahmen, Kostenstellen und Töpfe. Vorher sichern.</p>
         <div class="btns" style="margin:0">
           <button type="button" class="ghost" data-action="alles-zuruecksetzen">Alle Daten zurücksetzen</button>
         </div>
@@ -442,14 +464,10 @@ nav.tabbar button:active{opacity:.7}
       <span class="ic-outline"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"><rect x="4" y="6" width="16" height="12" rx="2.5"/></svg></span>
       <span class="ic-filled"><svg viewBox="0 0 24 24" fill="currentColor"><rect x="4" y="6" width="16" height="12" rx="2.5"/></svg></span>
       Budget</button>
-    <button type="button" data-action="tab" data-tab="konten">
-      <span class="ic-outline"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="12" cy="12" r="8"/></svg></span>
-      <span class="ic-filled"><svg viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="12" r="8"/></svg></span>
-      Konten</button>
-    <button type="button" data-action="tab" data-tab="investment">
-      <span class="ic-outline"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"><path d="M12 4 L20 19 L4 19 Z"/></svg></span>
-      <span class="ic-filled"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 4 L20 19 L4 19 Z"/></svg></span>
-      Investment</button>
+    <button type="button" data-action="tab" data-tab="analyse">
+      <span class="ic-outline"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M4 19 V10 M10 19 V5 M16 19 V13 M22 19 H3"/></svg></span>
+      <span class="ic-filled"><svg viewBox="0 0 24 24" fill="currentColor"><rect x="3" y="10" width="3.4" height="9" rx="1"/><rect x="9" y="5" width="3.4" height="14" rx="1"/><rect x="15" y="13" width="3.4" height="6" rx="1"/></svg></span>
+      Analyse</button>
     <button type="button" data-action="tab" data-tab="mehr">
       <span class="ic-outline"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="6" cy="12" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="18" cy="12" r="1.6"/></svg></span>
       <span class="ic-filled"><svg viewBox="0 0 24 24" fill="currentColor"><circle cx="6" cy="12" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="18" cy="12" r="1.6"/></svg></span>
@@ -696,6 +714,46 @@ function betragFaellig(posten, monat) {
   return istFaelligIn(posten, monat) ? (Number(posten.betrag) || 0) : 0;
 }
 
+/* ---------- Zeitraum: Monat oder Kalenderjahr ----------
+   Duenne Huellen um die unveraenderten Regeln oben. "Faellig" = im Monat
+   der tatsaechlichen Zahlung, "Durchschnitt" = Jahreskosten auf zwoelf
+   Monate verteilt (PRD 4.3). Ueber ein Jahr summiert liefern beide
+   dasselbe Ergebnis. */
+
+function jahrVon(monat) { return monat.split('-')[0]; }
+
+function monateImJahr(jahr) {
+  return Array.from({ length: 12 }, (unused, i) => jahr + '-' + String(i + 1).padStart(2, '0'));
+}
+
+function summeFaellig(liste, monat) {
+  return liste.filter((x) => istGueltig(x, monat)).reduce((a, x) => a + betragFaellig(x, monat), 0);
+}
+
+function summeJahr(liste, jahr) {
+  return monateImJahr(jahr).reduce((a, m) => a + summeFaellig(liste, m), 0);
+}
+
+/* Was im gewaehlten Zeitraum tatsaechlich anfaellt. */
+function summeZeitraum(liste) {
+  return uebersichtSicht === 'jahr'
+    ? summeJahr(liste, jahrVon(uebersichtMonat))
+    : summeFaellig(liste, uebersichtMonat);
+}
+
+/* Gleichbleibender Betrag: pro Monat der Durchschnitt, pro Jahr mal zwoelf.
+   Grundlage der Topfbeitraege (PRD 5.2) und der Budgetsummen. */
+function summeDurchschnitt(liste) {
+  const faktor = uebersichtSicht === 'jahr' ? 12 : 1;
+  return liste.reduce((a, x) => a + betragGeglaettet(x), 0) * faktor;
+}
+
+function zeitraumLabel() {
+  return uebersichtSicht === 'jahr' ? 'Jahr ' + jahrVon(uebersichtMonat) : monatLabel(uebersichtMonat);
+}
+
+function proZeitraum() { return uebersichtSicht === 'jahr' ? 'pro Jahr' : 'pro Monat'; }
+
 function einkommensAnteile(monat) {
   const betraege = {}; let summe = 0;
   dok.personen.forEach((p) => {
@@ -730,14 +788,14 @@ function traegerName(id) {
 
 function kostenartName(k) { return { D: 'Dauerauftrag', R: 'Rückstellung', V: 'Variabel' }[k] || k; }
 function rhythmusName(r) { return (RHYTHMEN.find((x) => x[0] === r) || [null, r])[1]; }
-function kontoTypName(t) { return { giro: 'Giro', spar: 'Spar', bargeld: 'Bargeld', fremdwaehrung: 'Fremdwährung' }[t] || t; }
-function investmentTypName(t) { return { saeule3a: 'Säule 3a', fonds: 'Fonds', depot: 'Depot', krypto: 'Krypto' }[t] || t; }
 
 /* ---------- Zustand der Oberflaeche (nicht gespeichert) ---------- */
 
 let tabAktuell = 'uebersicht';
-let inaktiveSichtbar = { budget: false, konten: false, investment: false, mehr: false };
+let inaktiveSichtbar = { budget: false, mehr: false };
 let uebersichtMonat = monatHeute();
+let uebersichtSicht = 'monat';       /* 'monat' | 'jahr' — gilt fuer Uebersicht und Budget */
+let budgetGruppierung = 'gruppe';    /* 'gruppe' | 'traeger' */
 
 function clampMonat(m) { return m < dok.einstellungen.startmonat ? dok.einstellungen.startmonat : m; }
 
@@ -808,23 +866,6 @@ function neueEinnahme() {
   dok.einnahmen.push(e);
   sichern();
   sheetOeffnenNeu('einnahme', e.id);
-}
-
-function neuesKonto() {
-  const k = { id: neueId(), name: '', typ: 'giro', waehrung: 'CHF', inhaber: dok.personen[0].id, aktiv: true };
-  dok.konten.push(k);
-  sichern();
-  sheetOeffnenNeu('konto', k.id);
-}
-
-function neuesInvestment() {
-  const i = {
-    id: neueId(), name: '', anbieter: '', typ: 'saeule3a', waehrung: 'CHF', inhaber: dok.personen[0].id,
-    startkapital: 0, startdatum: heutedatum(), monatlicheEinzahlung: 0, renditeErwartetProJahr: 0, aktiv: true
-  };
-  dok.investments.push(i);
-  sichern();
-  sheetOeffnenNeu('investment', i.id);
 }
 
 function neuerTopf() {
@@ -904,18 +945,16 @@ function hartEntfernen(entity, id) {
 function entityFormHTML(entity, obj) {
   if (entity === 'budgetposten') return postenFormHTML(obj, dok.kategorien.find((k) => k.id === obj.kategorieId) || { name: '', gruppe: '' });
   if (entity === 'einnahme') return einnahmeFormHTML(obj);
-  if (entity === 'konto') return kontoFormHTML(obj);
-  if (entity === 'investment') return investmentFormHTML(obj);
   if (entity === 'topf') return topfFormHTML(obj);
 }
 
 const SHEET_TITEL_NEU = {
   budgetposten: 'Kostenstelle hinzufügen', einnahme: 'Einnahme hinzufügen',
-  konto: 'Konto hinzufügen', investment: 'Investment hinzufügen', topf: 'Topf hinzufügen'
+  topf: 'Topf hinzufügen'
 };
 const SHEET_TITEL_BEARBEITEN = {
   budgetposten: 'Kostenstelle bearbeiten', einnahme: 'Einnahme bearbeiten',
-  konto: 'Konto bearbeiten', investment: 'Investment bearbeiten', topf: 'Topf bearbeiten'
+  topf: 'Topf bearbeiten'
 };
 
 function sheetOeffnenNeu(entity, id) {
@@ -1180,20 +1219,26 @@ function wizard13tesVon(e) {
 /* Kreuz und Auszahlungsmonat stehen beide auf der Nettolohn-Seite; die
    Begleit-Einnahme selbst bekommt bewusst keine eigene Seite und keinen
    eigenen Betrag (siehe wizardAktuelleListe und feldGeaendert). */
+function wizard13tesMonatHTML(comp) {
+  if (!comp) return '';
+  const gewaehlt = (comp.faelligMonate && comp.faelligMonate[0]) || 12;
+  return '<div class="feld"><label>Auszahlung des 13. Monatslohns</label>' +
+    '<select data-action="wizard-13tes-monat" data-id="' + comp.id + '">' +
+    MONATSNAMEN.map((n, i) => '<option value="' + (i + 1) + '"' +
+      (gewaehlt === i + 1 ? ' selected' : '') + '>' + n + '</option>').join('') +
+    '</select></div>';
+}
+
+/* Der Monatsteil steht in einem eigenen Behaelter, damit das Ankreuzen nur
+   diesen austauscht und weder das Kaestchen noch das Betragsfeld anfasst —
+   ein kompletter Neuaufbau wuerde einen noch nicht uebernommenen Wert im
+   fokussierten Feld verwerfen. */
 function wizard13tesHTML(e) {
   const comp = wizard13tesVon(e);
-  let html = '<div class="wizard-aktiv-zeile" style="justify-content:flex-start">' +
+  return '<div class="wizard-aktiv-zeile" style="justify-content:flex-start">' +
     '<label class="wizard-aktiv-label"><input type="checkbox" data-action="wizard-einnahme-13tes" data-id="' + e.id + '"' +
-    (comp ? ' checked' : '') + '> 13. Monatslohn</label></div>';
-  if (comp) {
-    const gewaehlt = (comp.faelligMonate && comp.faelligMonate[0]) || 12;
-    html += '<div class="feld"><label>Auszahlung des 13. Monatslohns</label>' +
-      '<select data-action="wizard-13tes-monat" data-id="' + comp.id + '">' +
-      MONATSNAMEN.map((n, i) => '<option value="' + (i + 1) + '"' +
-        (gewaehlt === i + 1 ? ' selected' : '') + '>' + n + '</option>').join('') +
-      '</select></div>';
-  }
-  return html;
+    (comp ? ' checked' : '') + '> 13. Monatslohn</label></div>' +
+    '<div id="wizard-13tes-monat">' + wizard13tesMonatHTML(comp) + '</div>';
 }
 
 function wizardEinnahmeFormHTML(e) {
@@ -1440,37 +1485,53 @@ function wizardFokussiere(entity, id, feld) {
   if (el) { el.focus(); el.scrollIntoView({ block: 'center' }); }
 }
 
+/* Uebernimmt den Wert des gerade offenen Feldes, bevor eine Aktion etwas
+   neu zeichnet. Safari liefert "change" erst beim Verlassen des Feldes,
+   und dieser Blur geht verloren, sobald der Bereich ersetzt wird — ohne
+   diesen Schritt faellt das Feld auf den alten Stand aus dok zurueck. */
+function wizardFeldUebernehmen() {
+  const el = document.activeElement;
+  if (el && el.dataset && el.dataset.feld && el.closest && el.closest('#wizard-inhalt')) {
+    feldGeaendert(el, false); /* nur speichern, kein Neuaufbau */
+  }
+}
+
 /* Legt beim Ankreuzen eine zweite Einnahme "13. Monatslohn" an (oder
-   reaktiviert eine bereits vorhandene) und springt dorthin; beim
-   Abhaken wird sie deaktiviert statt hart geloescht (Regel 5). Keine
-   Aenderung an den Rechenregeln — jaehrlich/Dezember wird von
-   betragGeglaettet/betragFaellig bereits korrekt behandelt. */
+   reaktiviert eine bereits vorhandene); beim Abhaken wird sie deaktiviert
+   statt hart geloescht (Regel 5). Keine Aenderung an den Rechenregeln —
+   jaehrlich/Dezember wird von betragGeglaettet/betragFaellig bereits
+   korrekt behandelt. Bewusst ohne setzeAktiv() und ohne
+   renderWizardSchritt(): beide wuerden die Seite komplett neu aufbauen und
+   dabei einen getippten, noch nicht uebernommenen Betrag verwerfen. */
 function wizardEinnahme13tesUmschalten(nettolohnId, angehakt) {
   const nettolohn = findeObjekt('einnahme', nettolohnId);
   if (!nettolohn) return;
   let comp = dok.einnahmen.find((x) => x.art === '13. Monatslohn' && x.personId === nettolohn.personId);
   if (angehakt) {
     if (comp) {
-      setzeAktiv('einnahme', comp.id, true);
+      comp.aktiv = true;
     } else {
       comp = neueEinnahmeObjekt();
       comp.art = '13. Monatslohn'; comp.personId = nettolohn.personId; comp.betrag = nettolohn.betrag;
       comp.rhythmus = 'jaehrlich'; comp.faelligMonate = [12];
       dok.einnahmen.push(comp);
-      sichern(); renderAktuellerTab();
     }
-    renderWizardSchritt(); /* bleibt auf der Nettolohn-Seite, zeigt nur die Monatswahl dazu */
   } else if (comp) {
-    setzeAktiv('einnahme', comp.id, false);
+    comp.aktiv = false;
+    comp = null;
   }
+  sichern(); renderNurTab();
+  const behaelter = $('wizard-13tes-monat');
+  if (behaelter) behaelter.innerHTML = wizard13tesMonatHTML(comp);
 }
 
-/* Auszahlungsmonat des 13. Monatslohns, gesetzt von der Nettolohn-Seite. */
+/* Auszahlungsmonat des 13. Monatslohns, gesetzt von der Nettolohn-Seite.
+   Das Select zeigt die Auswahl bereits selbst — kein Neuaufbau noetig. */
 function wizard13tesMonatGewaehlt(el) {
   const comp = findeObjekt('einnahme', el.dataset.id);
   if (!comp) return;
   comp.faelligMonate = [Number(el.value)];
-  sichern(); renderAktuellerTab();
+  sichern(); renderNurTab();
 }
 
 /* Gruppen-Auswahl im Assistenten: "__neu" darf nie ins Datenmodell,
@@ -1486,7 +1547,7 @@ function wizardGruppeGewaehlt(el) {
     return;
   }
   k.gruppe = el.value;
-  sichern(); renderAktuellerTab();
+  sichern(); renderNurTab(); /* Select zeigt die Wahl selbst, kein Neuaufbau */
 }
 
 function wizardGruppeListe(id) {
@@ -1600,9 +1661,14 @@ function infoSchliessen() {
   $('info-overlay').classList.remove('offen');
 }
 
+/* Betonte Zeilen tragen die Akzentfarbe — aber nur bei einem Betrag ab
+   null. Ein negatives Ergebnis in Gruen zu zeigen waere irrefuehrend; es
+   bleibt betont, aber in der normalen Schriftfarbe (kein Rot, DESIGN.md:
+   Rot nur bei echten Fehlern). */
 function zeileHTML(label, betrag, betont) {
+  const klasse = betont ? (betrag < 0 ? ' stark' : ' ok') : '';
   return '<div class="row"><div class="name"><b>' + escapeHtml(label) + '</b></div><div class="mark' +
-    (betont ? ' ok' : '') + '">' + formatCHF(betrag) + '</div></div>';
+    klasse + '">' + formatCHF(betrag) + '</div></div>';
 }
 
 const GRUPPEN_VORSCHLAEGE = ['Wohnkosten','Energie und Kommunikation','Steuern','Versicherungen und Vorsorge',
@@ -1668,128 +1734,191 @@ function postenFormHTML(p, k) {
     '</div>';
 }
 
-function renderBudget() {
-  aktualisiereGruppenListe();
-  const zeigeInaktiv = inaktiveSichtbar.budget;
-  $('umschalt-budget').textContent = 'Inaktive: ' + (zeigeInaktiv ? 'ein' : 'aus');
+/* Summe einer Postengruppe im gewaehlten Zeitraum, als Kopfzeilen-Betrag. */
+function kopfsummeHTML(liste) {
+  return '<span class="kopfsumme">' + formatCHF(summeDurchschnitt(liste)) + '</span>';
+}
 
-  const einnahmenListe = dok.einnahmen.filter((e) => zeigeInaktiv || e.aktiv);
-  $('liste-einnahmen').innerHTML = einnahmenListe.length
-    ? einnahmenListe.map(einnahmeZeileHTML).join('')
-    : '<p class="leer">Noch keine Einnahmen erfasst.</p>';
+function budgetPostenListeHTML(liste) {
+  return '<div class="liste">' + liste
+    .slice()
+    .sort((a, b) => {
+      const ka = dok.kategorien.find((x) => x.id === a.kategorieId) || { name: '' };
+      const kb = dok.kategorien.find((x) => x.id === b.kategorieId) || { name: '' };
+      return (ka.name || '').localeCompare(kb.name || '', 'de-CH');
+    })
+    .map(postenZeileHTML).join('') + '</div>';
+}
 
-  const posten = dok.budgetposten.filter((p) => zeigeInaktiv || p.aktiv);
+/* Nach Kostengruppe: eine Karte je Gruppe, Summe im Kopf. */
+function budgetNachGruppeHTML(posten) {
   const gruppen = {};
   posten.forEach((p) => {
     const k = dok.kategorien.find((x) => x.id === p.kategorieId) || { name: '', gruppe: '' };
     const g = k.gruppe && k.gruppe.trim() ? k.gruppe : 'Ohne Gruppe';
     (gruppen[g] = gruppen[g] || []).push(p);
   });
-  const gruppenNamen = Object.keys(gruppen).sort((a, b) => a.localeCompare(b, 'de-CH'));
+  return Object.keys(gruppen).sort((a, b) => a.localeCompare(b, 'de-CH')).map((g) =>
+    '<section><div class="gruppenkopf"><h3>' + escapeHtml(g) + '</h3>' +
+    kopfsummeHTML(gruppen[g]) +
+    '<button type="button" data-action="posten-neu" data-gruppe="' + escapeHtml(g) + '">+ Posten</button></div>' +
+    budgetPostenListeHTML(gruppen[g]) + '</section>'
+  ).join('');
+}
 
-  let html = '';
-  if (gruppenNamen.length === 0) {
+/* Nach Traeger, darin nach Kostenart — mit Zwischensummen je Kostenart. */
+function budgetNachTraegerHTML(posten) {
+  const traeger = {};
+  posten.forEach((p) => { (traeger[p.traeger] = traeger[p.traeger] || []).push(p); });
+  const reihenfolge = [...dok.toepfe.map((t) => t.id), ...dok.personen.map((p) => p.id)]
+    .filter((id) => traeger[id]);
+  Object.keys(traeger).forEach((id) => { if (!reihenfolge.includes(id)) reihenfolge.push(id); });
+
+  return reihenfolge.map((id) => {
+    const liste = traeger[id];
+    let html = '<section><div class="gruppenkopf"><h3>' + escapeHtml(traegerName(id)) + '</h3>' +
+      kopfsummeHTML(liste) + '</div>';
+    [['D', 'Dauerauftrag'], ['R', 'Rückstellung'], ['V', 'Variabel']].forEach(([art, name]) => {
+      const teil = liste.filter((p) => p.kostenart === art);
+      if (!teil.length) return;
+      html += '<div class="unterkopf"><h4>' + name + '</h4>' + kopfsummeHTML(teil) + '</div>' +
+        budgetPostenListeHTML(teil);
+    });
+    return html + '</section>';
+  }).join('');
+}
+
+function renderBudget() {
+  aktualisiereGruppenListe();
+  const zeigeInaktiv = inaktiveSichtbar.budget;
+  $('umschalt-budget').textContent = 'Inaktive: ' + (zeigeInaktiv ? 'ein' : 'aus');
+  document.querySelectorAll('#budget-segment button').forEach((b) => {
+    b.classList.toggle('an', b.dataset.gruppierung === budgetGruppierung);
+  });
+
+  const einnahmenListe = dok.einnahmen.filter((e) => zeigeInaktiv || e.aktiv);
+  $('summe-einnahmen').textContent = formatCHF(summeDurchschnitt(einnahmenListe.filter((e) => e.aktiv)));
+  $('liste-einnahmen').innerHTML = einnahmenListe.length
+    ? einnahmenListe.map(einnahmeZeileHTML).join('')
+    : '<p class="leer">Noch keine Einnahmen erfasst.</p>';
+
+  const posten = dok.budgetposten.filter((p) => zeigeInaktiv || p.aktiv);
+  let html;
+  if (posten.length === 0) {
     html = '<section><p class="leer">Noch keine Budgetposten erfasst. Mit «+ Neuer Posten» beginnen.</p></section>';
   } else {
-    gruppenNamen.forEach((g) => {
-      html += '<section><div class="gruppenkopf"><h3>' + escapeHtml(g) + '</h3>' +
-        '<button type="button" data-action="posten-neu" data-gruppe="' + escapeHtml(g) + '">+ Posten</button></div><div class="liste">';
-      gruppen[g]
-        .sort((a, b) => {
-          const ka = dok.kategorien.find((x) => x.id === a.kategorieId) || { name: '' };
-          const kb = dok.kategorien.find((x) => x.id === b.kategorieId) || { name: '' };
-          return ka.name.localeCompare(kb.name, 'de-CH');
-        })
-        .forEach((p) => { html += postenZeileHTML(p); });
-      html += '</div></section>';
-    });
+    html = budgetGruppierung === 'traeger' ? budgetNachTraegerHTML(posten) : budgetNachGruppeHTML(posten);
   }
   $('budget-gruppen').innerHTML = html;
 }
 
-/* ---------- Konten ---------- */
+/* ---------- Analyse ----------
+   Diagramme als schlichtes Inline-SVG, ohne Bibliothek und ohne
+   Build-Schritt. Neue Auswertungen sind ein Eintrag in
+   ANALYSE_DIAGRAMME, kein Umbau. */
 
-function kontoZeileHTML(k) {
-  const name = k.name && k.name.trim() ? escapeHtml(k.name) : '<i>(ohne Bezeichnung)</i>';
-  const sub = kontoTypName(k.typ) + ' · ' + traegerName(k.inhaber) + (k.waehrung !== 'CHF' ? ' · ' + escapeHtml(k.waehrung) : '');
-  return '<div class="item' + (k.aktiv ? '' : ' inaktiv') + '">' +
-    '<div class="item-kopf" data-action="oeffnen" data-entity="konto" data-id="' + k.id + '">' +
-    '<span class="chev">›</span><div class="haupt"><b>' + name + '</b><span>' + sub + '</span></div></div></div>';
+/* Die zwoelf Monatswerte des gewaehlten Kalenderjahrs, Faelligkeitssicht. */
+function analyseJahresreihe() {
+  const jahr = jahrVon(uebersichtMonat);
+  return monateImJahr(jahr).map((m) => ({
+    monat: m,
+    kuerzel: MONATSKUERZEL[Number(m.split('-')[1]) - 1],
+    einnahmen: summeFaellig(dok.einnahmen, m),
+    kosten: summeFaellig(dok.budgetposten, m),
+    wert: summeFaellig(dok.einnahmen, m) - summeFaellig(dok.budgetposten, m)
+  }));
 }
 
-function kontoFormHTML(k) {
-  return '<div class="editform">' +
-    feldHTML('Bezeichnung', 'text', 'konto', k.id, 'name', k.name) +
-    '<div class="feldzeile">' +
-      '<div class="feld"><label>Typ' + infoKnopfHTML([
-          ['Giro', 'laufendes Konto für den Alltag'],
-          ['Spar', 'Spareinlage'],
-          ['Bargeld', 'Bargeldbestand'],
-          ['Fremdwährung', 'Konto in einer anderen Währung als CHF']
-        ]) + '</label>' +
-        '<select data-entity="konto" data-id="' + k.id + '" data-feld="typ">' +
-        [['giro', 'Giro'], ['spar', 'Spar'], ['bargeld', 'Bargeld'], ['fremdwaehrung', 'Fremdwährung']]
-          .map(([v, l]) => '<option value="' + v + '"' + (v === k.typ ? ' selected' : '') + '>' + escapeHtml(l) + '</option>').join('') +
-        '</select>' +
-      '</div>' +
-      feldHTML('Währung', 'text', 'konto', k.id, 'waehrung', k.waehrung) +
-    '</div>' +
-    auswahlHTML('Inhaber', 'konto', k.id, 'inhaber', k.inhaber, null, traegerOptionsHTML(k.inhaber)) +
-    '</div>';
+const DIA = { breite: 320, hoehe: 150, links: 4, rechts: 4, oben: 14, unten: 18 };
+
+function diaSkala(werte) {
+  const max = Math.max(0, ...werte), min = Math.min(0, ...werte);
+  const spanne = (max - min) || 1;
+  const innen = DIA.hoehe - DIA.oben - DIA.unten;
+  return { max, min, y: (w) => DIA.oben + (max - w) / spanne * innen, null: DIA.oben + max / spanne * innen };
 }
 
-function renderKonten() {
-  const zeigeInaktiv = inaktiveSichtbar.konten;
-  $('umschalt-konten').textContent = 'Inaktive: ' + (zeigeInaktiv ? 'ein' : 'aus');
-  const liste = dok.konten.filter((k) => zeigeInaktiv || k.aktiv).slice().sort((a, b) => a.name.localeCompare(b.name, 'de-CH'));
-  $('liste-konten').innerHTML = liste.length ? liste.map(kontoZeileHTML).join('') : '<p class="leer">Noch keine Konten erfasst.</p>';
+/* Diagramm 1: was in jedem einzelnen Monat uebrig bleibt. */
+function diagrammSparbetragProMonat(reihe) {
+  const werte = reihe.map((r) => r.wert);
+  const s = diaSkala(werte);
+  const feld = (DIA.breite - DIA.links - DIA.rechts) / 12;
+  const breite = feld * 0.62;
+  let html = '<svg class="diagramm" viewBox="0 0 ' + DIA.breite + ' ' + DIA.hoehe + '" role="img" aria-label="Sparbetrag je Monat">';
+  html += '<line class="achse" x1="' + DIA.links + '" y1="' + s.null.toFixed(1) + '" x2="' + (DIA.breite - DIA.rechts) + '" y2="' + s.null.toFixed(1) + '"/>';
+  reihe.forEach((r, i) => {
+    const x = DIA.links + i * feld + (feld - breite) / 2;
+    const y = Math.min(s.y(r.wert), s.null), h = Math.max(Math.abs(s.y(r.wert) - s.null), 1);
+    const jetzt = r.monat === uebersichtMonat ? ' jetzt' : '';
+    html += '<rect class="balken' + jetzt + '" x="' + x.toFixed(1) + '" y="' + y.toFixed(1) +
+      '" width="' + breite.toFixed(1) + '" height="' + h.toFixed(1) + '" rx="1.5"/>';
+    html += '<text x="' + (DIA.links + i * feld + feld / 2).toFixed(1) + '" y="' + (DIA.hoehe - 5) +
+      '" text-anchor="middle">' + r.kuerzel + '</text>';
+  });
+  return html + '</svg>';
 }
 
-/* ---------- Investment ---------- */
-
-function investmentZeileHTML(i) {
-  const name = i.name && i.name.trim() ? escapeHtml(i.name) : '<i>(ohne Bezeichnung)</i>';
-  const sub = investmentTypName(i.typ) + ' · ' + personName(i.inhaber) + ' · ' + (Number(i.renditeErwartetProJahr) || 0) + ' % p.a.';
-  return '<div class="item' + (i.aktiv ? '' : ' inaktiv') + '">' +
-    '<div class="item-kopf" data-action="oeffnen" data-entity="investment" data-id="' + i.id + '">' +
-    '<span class="chev">›</span><div class="haupt"><b>' + name + '</b><span>' + sub + '</span></div></div></div>';
+/* Diagramm 2: wie das Ersparte ueber das Jahr waechst. */
+function diagrammErspartesKumuliert(reihe) {
+  let lauf = 0;
+  const punkte = reihe.map((r) => { lauf += r.wert; return lauf; });
+  const s = diaSkala(punkte);
+  const feld = (DIA.breite - DIA.links - DIA.rechts) / 12;
+  const x = (i) => DIA.links + i * feld + feld / 2;
+  const linie = punkte.map((w, i) => x(i).toFixed(1) + ' ' + s.y(w).toFixed(1)).join(' L ');
+  let html = '<svg class="diagramm" viewBox="0 0 ' + DIA.breite + ' ' + DIA.hoehe + '" role="img" aria-label="Erspartes im Jahresverlauf">';
+  html += '<line class="achse" x1="' + DIA.links + '" y1="' + s.null.toFixed(1) + '" x2="' + (DIA.breite - DIA.rechts) + '" y2="' + s.null.toFixed(1) + '"/>';
+  html += '<path class="flaeche" d="M ' + x(0).toFixed(1) + ' ' + s.null.toFixed(1) + ' L ' + linie +
+    ' L ' + x(11).toFixed(1) + ' ' + s.null.toFixed(1) + ' Z"/>';
+  html += '<path class="linie" d="M ' + linie + '"/>';
+  html += '<circle class="punkt" cx="' + x(11).toFixed(1) + '" cy="' + s.y(punkte[11]).toFixed(1) + '" r="2.5"/>';
+  html += '<text class="wert" x="' + (DIA.breite - DIA.rechts) + '" y="' + Math.max(9, s.y(punkte[11]) - 6).toFixed(1) +
+    '" text-anchor="end">' + escapeHtml(formatCHF(punkte[11])) + '</text>';
+  reihe.forEach((r, i) => {
+    if (i % 2) return;
+    html += '<text x="' + x(i).toFixed(1) + '" y="' + (DIA.hoehe - 5) + '" text-anchor="middle">' + r.kuerzel + '</text>';
+  });
+  return html + '</svg>';
 }
 
-function investmentFormHTML(i) {
-  return '<div class="editform">' +
-    feldHTML('Bezeichnung', 'text', 'investment', i.id, 'name', i.name) +
-    feldHTML('Anbieter', 'text', 'investment', i.id, 'anbieter', i.anbieter) +
-    '<div class="feldzeile">' +
-      '<div class="feld"><label>Typ' + infoKnopfHTML([
-          ['Säule 3a', 'gebundene Vorsorge'],
-          ['Fonds', 'Anteile an einem Anlagefonds'],
-          ['Depot', 'freies Wertschriftendepot'],
-          ['Krypto', 'Kryptowährungen']
-        ]) + '</label>' +
-        '<select data-entity="investment" data-id="' + i.id + '" data-feld="typ">' +
-        [['saeule3a', 'Säule 3a'], ['fonds', 'Fonds'], ['depot', 'Depot'], ['krypto', 'Krypto']]
-          .map(([v, l]) => '<option value="' + v + '"' + (v === i.typ ? ' selected' : '') + '>' + escapeHtml(l) + '</option>').join('') +
-        '</select>' +
-      '</div>' +
-      auswahlHTML('Inhaber', 'investment', i.id, 'inhaber', i.inhaber, dok.personen.map((p) => [p.id, personName(p.id)])) +
-    '</div>' +
-    '<div class="feldzeile">' +
-      feldHTML('Startkapital (CHF)', 'number', 'investment', i.id, 'startkapital', i.startkapital, { step: '0.05' }) +
-      feldHTML('Startdatum', 'date', 'investment', i.id, 'startdatum', i.startdatum) +
-    '</div>' +
-    '<div class="feldzeile">' +
-      feldHTML('Mtl. Einzahlung (CHF)', 'number', 'investment', i.id, 'monatlicheEinzahlung', i.monatlicheEinzahlung, { step: '0.05' }) +
-      feldHTML('Erwartete Rendite p.a. (%)', 'number', 'investment', i.id, 'renditeErwartetProJahr', i.renditeErwartetProJahr, { step: '0.1' }) +
-    '</div>' +
-    feldHTML('Währung', 'text', 'investment', i.id, 'waehrung', i.waehrung) +
-    '</div>';
-}
+const ANALYSE_DIAGRAMME = [
+  {
+    id: 'sparbetrag-monat',
+    titel: 'Sparbetrag je Monat',
+    hinweis: 'Was in jedem einzelnen Monat übrig bleibt. Monate mit grossen Rechnungen fallen tiefer aus — der aktuell gewählte Monat ist hervorgehoben.',
+    info: [
+      ['Grundlage', 'Einnahmen und Kosten im Monat ihrer tatsächlichen Zahlung'],
+      ['Unter der Linie', 'in diesem Monat übersteigen die Rechnungen die Einnahmen — kein Fehler, sondern eine grosse Zahlung'],
+      ['Zeitraum', 'das oben gewählte Kalenderjahr']
+    ],
+    zeichnen: diagrammSparbetragProMonat
+  },
+  {
+    id: 'erspartes-kumuliert',
+    titel: 'Erspartes im Jahresverlauf',
+    hinweis: 'Wie sich das Ersparte über das Jahr aufbaut, Monat für Monat aufsummiert.',
+    info: [
+      ['Grundlage', 'die Monatswerte des ersten Diagramms, fortlaufend addiert'],
+      ['Endwert', 'entspricht dem Sparbetrag der Jahressicht auf der Übersicht'],
+      ['Start', 'beginnt im Januar bei null — bereits vorhandenes Vermögen ist nicht enthalten']
+    ],
+    zeichnen: diagrammErspartesKumuliert
+  }
+];
 
-function renderInvestment() {
-  const zeigeInaktiv = inaktiveSichtbar.investment;
-  $('umschalt-investment').textContent = 'Inaktive: ' + (zeigeInaktiv ? 'ein' : 'aus');
-  const liste = dok.investments.filter((i) => zeigeInaktiv || i.aktiv).slice().sort((a, b) => a.name.localeCompare(b.name, 'de-CH'));
-  $('liste-investments').innerHTML = liste.length ? liste.map(investmentZeileHTML).join('') : '<p class="leer">Noch keine Investments erfasst.</p>';
+function renderAnalyse() {
+  const reihe = analyseJahresreihe();
+  const leer = reihe.every((r) => r.einnahmen === 0 && r.kosten === 0);
+  if (leer) {
+    $('analyse-liste').innerHTML = '<section><p class="leer">Noch keine Einnahmen und Kosten erfasst. ' +
+      'Sobald im Budget etwas steht, erscheinen hier die Auswertungen.</p></section>';
+    return;
+  }
+  $('analyse-liste').innerHTML = ANALYSE_DIAGRAMME.map((d) =>
+    '<section><h2>' + escapeHtml(d.titel) + infoKnopfHTML(d.info) + '</h2>' +
+    d.zeichnen(reihe) +
+    '<p class="note" style="margin:8px 0 12px">' + escapeHtml(d.hinweis) + '</p></section>'
+  ).join('');
 }
 
 /* ---------- Mehr ---------- */
@@ -1867,44 +1996,59 @@ function renderMehr() {
 /* ---------- Uebersicht ---------- */
 
 function renderUebersicht() {
-  const monat = uebersichtMonat || monatHeute();
-  $('uebersicht-monat').textContent = monatLabel(monat);
+  const monat = uebersichtMonat;
+  const jahr = uebersichtSicht === 'jahr';
 
-  const einnahmenAktiv = dok.einnahmen.filter((e) => istGueltig(e, monat));
-  const postenAktiv = dok.budgetposten.filter((p) => istGueltig(p, monat));
+  const einnahmen = summeZeitraum(dok.einnahmen);
+  const kosten = summeZeitraum(dok.budgetposten);
 
-  const einnGeglaettet = einnahmenAktiv.reduce((a, e) => a + betragGeglaettet(e), 0);
-  const einnFaellig = einnahmenAktiv.reduce((a, e) => a + betragFaellig(e, monat), 0);
-  const kostGeglaettet = postenAktiv.reduce((a, p) => a + betragGeglaettet(p), 0);
-  const kostFaellig = postenAktiv.reduce((a, p) => a + betragFaellig(p, monat), 0);
+  $('hero-zahl').textContent = formatCHF(einnahmen - kosten);
+  $('hero-sub').textContent = jahr ? 'im Jahr ' + jahrVon(monat) : 'im ' + monatLabel(monat);
 
-  $('hero-zahl').textContent = formatCHF(einnFaellig - kostFaellig);
+  $('uebersicht-brutto-titel').innerHTML = (jahr ? 'Im Jahr ' + jahrVon(monat) : 'In diesem Monat') +
+    infoKnopfHTML(jahr
+      ? [['Einnahmen', 'alles, was im Lauf des Jahres eingeht — inklusive 13. Monatslohn und Bonus'],
+         ['Kosten', 'alle Rechnungen des Jahres, unabhängig davon, wann sie fällig sind'],
+         ['Bleibt zum Sparen', 'Einnahmen minus Kosten für das ganze Jahr']]
+      : [['Einnahmen', 'was in diesem Monat tatsächlich eingeht'],
+         ['Kosten', 'die Rechnungen, die in diesem Monat tatsächlich bezahlt werden'],
+         ['Bleibt zum Sparen', 'Einnahmen minus Kosten — in Monaten mit grossen Rechnungen fällt das kleiner aus']]);
 
   $('uebersicht-brutto').innerHTML =
-    zeileHTML('Einnahmen, geglättet', einnGeglaettet) +
-    zeileHTML('Einnahmen, fällig diesen Monat', einnFaellig) +
-    zeileHTML('Kosten, geglättet', kostGeglaettet) +
-    zeileHTML('Kosten, fällig diesen Monat', kostFaellig);
+    zeileHTML('Einnahmen', einnahmen) +
+    zeileHTML('Kosten', kosten) +
+    zeileHTML('Bleibt zum Sparen', einnahmen - kosten, true);
 
-  $('uebersicht-sparbetrag').innerHTML =
-    zeileHTML('Geplant, Durchschnittssicht', einnGeglaettet - kostGeglaettet);
+  $('uebersicht-brutto-note').textContent = jahr
+    ? 'Alle zwölf Monate des Jahres zusammengezählt.'
+    : 'Nur was in diesem Monat fällig ist. Jährliche Rechnungen erscheinen im Monat ihrer Zahlung.';
 
+  /* Beiträge und Personenbilanz laufen ueber den gleichbleibenden Betrag
+     (PRD 5.2), damit die Einzahlung jeden Monat gleich hoch ist. */
   const anteile = einkommensAnteile(monat);
   const summeProPerson = {}; dok.personen.forEach((p) => { summeProPerson[p.id] = 0; });
-  const aktiveToepfe = dok.toepfe.filter((t) => t.aktiv);
+  const aktiveTöpfe = dok.toepfe.filter((t) => t.aktiv);
+  const postenGueltig = dok.budgetposten.filter((p) => istGueltig(p, monat));
 
-  if (aktiveToepfe.length === 0) {
+  $('uebersicht-toepfe-titel').innerHTML = 'Beitrag an die Töpfe, ' + proZeitraum() +
+    infoKnopfHTML([
+      ['Was das ist', 'der Betrag, den jede Person ' + proZeitraum() + ' in den gemeinsamen Topf einzahlt'],
+      ['Immer gleich hoch', 'jährliche Rechnungen wie Steuern und Prämien sind auf zwölf Monate verteilt'],
+      ['Aufteilung', 'richtet sich nach dem Verteilschlüssel des Topfes — änderbar unter "Mehr"']
+    ]);
+
+  if (aktiveTöpfe.length === 0) {
     $('uebersicht-toepfe').innerHTML = '<p class="leer">Noch keine Töpfe.</p>';
   } else {
     let html = ''; let summeKosten = 0;
-    aktiveToepfe.forEach((t) => {
-      const kosten = postenAktiv.filter((p) => p.traeger === t.id).reduce((a, p) => a + betragGeglaettet(p), 0);
-      summeKosten += kosten;
+    aktiveTöpfe.forEach((t) => {
+      const kostenTopf = summeDurchschnitt(postenGueltig.filter((p) => p.traeger === t.id));
+      summeKosten += kostenTopf;
       const anteilePersonen = anteilProTopf(t, anteile);
       html += '<section><h2>' + escapeHtml(t.name || '(ohne Bezeichnung)') + '</h2>' +
-        zeileHTML('Kosten', kosten);
+        zeileHTML('Kosten', kostenTopf);
       dok.personen.forEach((p) => {
-        const beitrag = kosten * (Number(anteilePersonen[p.id]) || 0) / 100;
+        const beitrag = kostenTopf * (Number(anteilePersonen[p.id]) || 0) / 100;
         summeProPerson[p.id] += beitrag;
         html += zeileHTML(personName(p.id), beitrag);
       });
@@ -1916,17 +2060,23 @@ function renderUebersicht() {
     $('uebersicht-toepfe').innerHTML = html;
   }
 
+  $('uebersicht-personen-titel').innerHTML = 'Je Person, ' + proZeitraum() +
+    infoKnopfHTML([
+      ['Einnahmen', 'Lohn und weitere Einnahmen dieser Person, ' + proZeitraum()],
+      ['Eigene Kosten', 'Kosten, die auf diese Person laufen — nicht auf einen gemeinsamen Topf'],
+      ['Bleibt übrig', 'was nach eigenen Kosten und Topfbeiträgen zum Sparen bleibt']
+    ]);
+
   let personenHTML = '';
   dok.personen.forEach((p) => {
-    const eigeneEinnahmen = dok.einnahmen.filter((e) => e.personId === p.id && istGueltig(e, monat)).reduce((a, e) => a + betragGeglaettet(e), 0);
-    const eigeneKosten = postenAktiv.filter((x) => x.traeger === p.id).reduce((a, x) => a + betragGeglaettet(x), 0);
+    const eigeneEinnahmen = summeDurchschnitt(dok.einnahmen.filter((e) => e.personId === p.id && istGueltig(e, monat)));
+    const eigeneKosten = summeDurchschnitt(postenGueltig.filter((x) => x.traeger === p.id));
     const beitraege = summeProPerson[p.id] || 0;
-    const rest = eigeneEinnahmen - eigeneKosten - beitraege;
     personenHTML += '<section><h2>' + escapeHtml(personName(p.id)) + '</h2>' +
       zeileHTML('Einnahmen', eigeneEinnahmen) +
       zeileHTML('Eigene Kosten', eigeneKosten) +
       zeileHTML('Beiträge an Töpfe', beitraege) +
-      zeileHTML('Ergebnis', rest, true) +
+      zeileHTML('Bleibt übrig', eigeneEinnahmen - eigeneKosten - beitraege, true) +
       '</section>';
   });
   $('uebersicht-personen').innerHTML = personenHTML;
@@ -1978,7 +2128,7 @@ function sicherungHerunterladen() {
 /* Setzt das ganze Dokument zurueck — bewusst nur ueber eine ausdrueckliche
    Rueckfrage erreichbar, gedacht zum Testen des Einstiegs. */
 function allesZuruecksetzen() {
-  if (!confirm('Wirklich alle Daten löschen? Personen, Einnahmen, Kostenstellen, Konten und Investments werden unwiderruflich entfernt.')) return;
+  if (!confirm('Wirklich alle Daten löschen? Personen, Einnahmen, Kostenstellen und Töpfe werden unwiderruflich entfernt.')) return;
   if (sheetOffen) sheetSchliessen();
   if (wizardOffen) wizardSchliessen(false);
   dok = leeresDokument();
@@ -2008,7 +2158,7 @@ function renderStatuszeile() {
   el.textContent = 'Gespeichert ' + d.toLocaleDateString('de-CH') + ' ' + d.toLocaleTimeString('de-CH', { hour: '2-digit', minute: '2-digit' });
 }
 
-const RENDERFUNKTIONEN = { uebersicht: renderUebersicht, budget: renderBudget, konten: renderKonten, investment: renderInvestment, mehr: renderMehr };
+const RENDERFUNKTIONEN = { uebersicht: renderUebersicht, budget: renderBudget, analyse: renderAnalyse, mehr: renderMehr };
 
 /* Haelt auch den sichtbaren Assistenten-Schritt konsistent, falls dieser
    gerade offen ist — z.B. Faelligkeitsmonate-Raster oder "aktiv"-
@@ -2018,8 +2168,15 @@ function renderAktuellerTab() {
   if (wizardOffen) renderWizardSchritt();
 }
 
+/* Frischt nur den (vom Assistenten verdeckten) Tab auf und laesst das
+   Assistenten-Formular unangetastet. Fuer Umschalter auf derselben Seite:
+   ein Neuaufbau wuerde einen getippten, noch nicht uebernommenen Wert im
+   fokussierten Feld durch den alten Stand aus dok ersetzen. */
+function renderNurTab() { RENDERFUNKTIONEN[tabAktuell](); }
+
 function renderAlles() {
-  renderUebersicht(); renderBudget(); renderKonten(); renderInvestment(); renderMehr();
+  renderZeitraum();
+  renderUebersicht(); renderBudget(); renderAnalyse(); renderMehr();
   renderStatuszeile(); renderSicherungStatus();
 }
 
@@ -2027,16 +2184,41 @@ function tabWechseln(tab) {
   tabAktuell = tab;
   document.querySelectorAll('.tabbar button').forEach((b) => b.classList.toggle('active', b.dataset.tab === tab));
   document.querySelectorAll('main > .page').forEach((p) => p.classList.toggle('active', p.id === 'seite-' + tab));
+  renderZeitraum();
   renderAktuellerTab();
 }
 
-function monatWechseln(delta) {
+/* Die Zeitraumleiste gilt fuer Uebersicht, Budget und Analyse. Unter
+   "Mehr" hat sie keine Bedeutung, in der Analyse zaehlt nur das Jahr. */
+function renderZeitraum() {
+  $('zeitraum').classList.toggle('aus', tabAktuell === 'mehr');
+  $('zeitraum-segment').classList.toggle('aus', tabAktuell === 'analyse');
+  document.querySelectorAll('#zeitraum-segment button').forEach((b) => {
+    b.classList.toggle('an', b.dataset.sicht === uebersichtSicht);
+  });
+  $('zeitraum-label').textContent = tabAktuell === 'analyse' ? 'Jahr ' + jahrVon(uebersichtMonat) : zeitraumLabel();
+}
+
+function sichtWechseln(sicht) {
+  uebersichtSicht = sicht;
+  renderZeitraum();
+  renderUebersicht(); renderBudget();
+}
+
+/* Schiebt in Monatssicht um einen Monat, sonst um ein ganzes Jahr. */
+function zeitWechseln(delta) {
   const [y, m] = uebersichtMonat.split('-').map(Number);
-  let neuM = m + delta, neuY = y;
-  if (neuM < 1) { neuM = 12; neuY--; }
-  if (neuM > 12) { neuM = 1; neuY++; }
+  let neuY = y, neuM = m;
+  if (uebersichtSicht === 'jahr' || tabAktuell === 'analyse') {
+    neuY += delta;
+  } else {
+    neuM += delta;
+    if (neuM < 1) { neuM = 12; neuY--; }
+    if (neuM > 12) { neuM = 1; neuY++; }
+  }
   uebersichtMonat = neuY + '-' + String(neuM).padStart(2, '0');
-  renderUebersicht();
+  renderZeitraum();
+  renderUebersicht(); renderBudget(); renderAnalyse();
 }
 
 /* ---------- Aktionen ---------- */
@@ -2049,8 +2231,6 @@ function behandeln(action, el) {
     case 'inaktive-umschalten': inaktiveSichtbar[d.tab] = !inaktiveSichtbar[d.tab]; renderAktuellerTab(); break;
     case 'posten-neu': neuerBudgetposten(d.gruppe || ''); break;
     case 'einnahme-neu': neueEinnahme(); break;
-    case 'konto-neu': neuesKonto(); break;
-    case 'investment-neu': neuesInvestment(); break;
     case 'topf-neu': neuerTopf(); break;
     case 'sheet-verwerfen': sheetVerwerfen(); break;
     case 'sheet-uebernehmen': sheetUebernehmen(); break;
@@ -2058,8 +2238,10 @@ function behandeln(action, el) {
     case 'info-oeffnen': infoOeffnen(d.punkte); break;
     case 'info-schliessen': infoSchliessen(); break;
     case 'monat-toggle': monatTogglen(d.entity, d.id, Number(d.monat)); break;
-    case 'monat-zurueck': monatWechseln(-1); break;
-    case 'monat-vor': monatWechseln(1); break;
+    case 'zeit-zurueck': zeitWechseln(-1); break;
+    case 'zeit-vor': zeitWechseln(1); break;
+    case 'sicht': sichtWechseln(d.sicht); break;
+    case 'budget-gruppierung': budgetGruppierung = d.gruppierung; renderBudget(); break;
     case 'sicherung-teilen': sicherungTeilen(); break;
     case 'sicherung-herunterladen': sicherungHerunterladen(); break;
     case 'sicherung-kopieren': sicherungKopieren(); break;
@@ -2069,7 +2251,14 @@ function behandeln(action, el) {
     case 'wizard-zurueck': wizardZurueck(); break;
     case 'wizard-einnahme-neu': wizardNeueEinnahme(); break;
     case 'wizard-posten-neu': wizardNeuerPosten(); break;
-    case 'wizard-posten-umschalten-aktiv': setzeAktiv('budgetposten', d.id, el.checked); break;
+    /* Ohne setzeAktiv(): dessen renderAktuellerTab() wuerde die Seite neu
+       aufbauen und getippte, noch nicht uebernommene Werte verwerfen. Das
+       Kaestchen hat der Browser bereits umgestellt. */
+    case 'wizard-posten-umschalten-aktiv': {
+      const posten = findeObjekt('budgetposten', d.id);
+      if (posten) { posten.aktiv = el.checked; sichern(); renderNurTab(); }
+      break;
+    }
     case 'wizard-einnahme-13tes': wizardEinnahme13tesUmschalten(d.id, el.checked); break;
     case 'wizard-gruppe-liste': wizardGruppeListe(d.id); break;
     case 'alles-zuruecksetzen': allesZuruecksetzen(); break;
@@ -2081,7 +2270,10 @@ document.addEventListener('click', (e) => {
   if (e.target.id === 'sheet-overlay') { sheetVerwerfen(); return; }
   if (e.target.id === 'wizard-overlay') { wizardSchliessen(false); return; }
   const el = e.target.closest('[data-action]');
-  if (el) behandeln(el.dataset.action, el);
+  if (el) {
+    if (wizardOffen) wizardFeldUebernehmen();
+    behandeln(el.dataset.action, el);
+  }
 });
 
 document.addEventListener('input', (e) => {
