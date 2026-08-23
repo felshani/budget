@@ -175,14 +175,23 @@ button:active{opacity:.72}
 .dia-tip[hidden]{display:none}
 .dia-tip b{font-family:var(--sans);font-weight:650;margin-right:5px}
 /* Kreisdiagramm: eine Akzentfarbe, abgestuft (DESIGN.md) */
-.diagramm .stueck{fill:var(--ok);stroke:var(--card);stroke-width:1.2}
-.diagramm .stueck.an{stroke:var(--ink);stroke-width:2}
-.legende{margin-top:4px}
+.diagramm .stueck{fill:var(--ok);stroke:var(--card);stroke-width:1.5}
+.diagramm .stueck.an{stroke:var(--ink);stroke-width:2.5}
+.diagramm text.mitte-titel{fill:var(--ink-soft);font-size:11px}
+.diagramm text.mitte-wert{fill:var(--ink);font-family:var(--mono);font-size:17px;font-weight:650}
 .legende-zeile{cursor:pointer}
 .legende-zeile.an .name b{color:var(--ok)}
 .legende-zeile .name{display:flex;align-items:baseline;gap:7px}
 .legende-zeile .name b{font-weight:550;font-size:14px}
 .punkt-farbe{width:10px;height:10px;border-radius:3px;background:var(--ok);flex:0 0 auto;align-self:center}
+/* Antippbarer Streifen unter dem Kreisdiagramm: oeffnet die Legende als
+   Off-Canvas. Die Punktreihe zeigt vorab, was darin steht. */
+.legende-knopf{display:flex;align-items:center;gap:10px;width:100%;min-height:52px;
+  margin-top:6px;padding:10px 14px;border-radius:16px;background:transparent;
+  border:1px solid var(--rule);color:var(--ink);font-size:14.5px;font-weight:550;text-align:left}
+.legende-punkte{display:flex;gap:4px;flex:0 0 auto}
+.legende-text{flex:1;min-width:0}
+.legende-pfeil{flex:0 0 auto;color:var(--ink-soft);font-size:18px;line-height:1}
 .anteil{font-size:12px;color:var(--ink-soft);font-family:var(--mono);white-space:nowrap;flex:0 0 auto}
 .dia-tip span{font-family:var(--mono);font-variant-numeric:tabular-nums}
 .diagramm .achse{stroke:var(--rule);stroke-width:1}
@@ -558,6 +567,22 @@ nav.tabbar button:active{opacity:.7}
       <div class="sheet-fuss">
         <button type="button" class="sheet-primaer" id="sheet-primaer" data-action="sheet-uebernehmen"></button>
         <button type="button" class="sheet-sekundaer" id="sheet-sekundaer" data-action="sheet-umschalten-aktiv" hidden></button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Legende des Kreisdiagramms: dieselbe Bottom-Sheet-Komponente, nur
+       eine weitere Auspraegung. -->
+  <div class="sheet-overlay" id="legende-overlay">
+    <div class="sheet" id="legende-sheet">
+      <div class="sheet-griff" aria-hidden="true"></div>
+      <div class="sheet-kopf">
+        <button type="button" class="sheet-schliessen" data-action="legende-schliessen" aria-label="Schliessen">&times;</button>
+        <h3 class="sheet-titel">Anteile am Jahr</h3>
+      </div>
+      <div class="sheet-inhalt" id="legende-liste"></div>
+      <div class="sheet-fuss">
+        <button type="button" class="sheet-primaer" data-action="legende-schliessen">Schliessen</button>
       </div>
     </div>
   </div>
@@ -1287,7 +1312,7 @@ function wizardVorlageEinfuegenFehlende() {
    beiden (Assistent, Sheet) offen ist, bleibt der Hintergrund gesperrt —
    auch wenn beide gleichzeitig offen sind (Sheet ueber dem Assistenten). */
 function aktualisiereScrollSperre() {
-  document.body.style.overflow = (wizardOffen || sheetOffen) ? 'hidden' : '';
+  document.body.style.overflow = (wizardOffen || sheetOffen || legendeOffen) ? 'hidden' : '';
 }
 
 /* Schlanke, assistenten-eigene Formulare: Betrag ist bewusst das
@@ -1976,6 +2001,9 @@ function diaSkala(werte) {
 let analyseReihe = [];
 let analyseKumuliert = [];
 let analyseAnteile = { stuecke: [], summe: 0, winkel: [] };
+/* Welches Kuchenstueck gerade hervorgehoben ist — die Legende steht im
+   Off-Canvas und wird beim Oeffnen neu gezeichnet, darum als Zustand. */
+let analyseAnteilAktiv = null;
 
 const diaFeld = () => (DIA.breite - DIA.links - DIA.rechts) / 12;
 const diaX = (i) => DIA.links + i * diaFeld() + diaFeld() / 2;
@@ -2070,16 +2098,15 @@ function analyseWertZeigen(svg, i) {
 }
 
 /* Hebt ein Kuchenstueck hervor und zeigt Betrag und Anteil daneben. */
-function analyseAnteilZeigen(svg, i, quelle) {
+function analyseAnteilZeigen(svg, i) {
   if (!svg || !analyseAnteile.stuecke || !analyseAnteile.stuecke[i]) return;
   const st = analyseAnteile.stuecke[i];
   const anteil = analyseAnteile.summe > 0 ? st.betrag / analyseAnteile.summe : 0;
-  const abschnitt = svg.closest('section');
   const wrap = svg.closest('.dia-wrap');
   const tip = wrap && wrap.querySelector('.dia-tip');
   if (tip) {
     tip.innerHTML = '<b>' + escapeHtml(st.name) + '</b><span>' + escapeHtml(formatCHF(st.betrag)) +
-      ' · ' + (anteil * 100).toFixed(anteil < 0.1 ? 1 : 0) + ' %</span>';
+      ' · ' + anteilText(anteil) + '</span>';
     tip.hidden = false;
     const breite = wrap.clientWidth;
     const halb = tip.offsetWidth / 2;
@@ -2090,11 +2117,11 @@ function analyseAnteilZeigen(svg, i, quelle) {
     tip.style.left = Math.max(halb, Math.min(breite - halb, x)) + 'px';
     tip.style.top = Math.max(0, y - 34) + 'px';
   }
+  analyseAnteilAktiv = i;
   svg.querySelectorAll('.stueck').forEach((el) => el.classList.toggle('an', Number(el.dataset.i) === i));
-  if (abschnitt) {
-    abschnitt.querySelectorAll('.legende-zeile').forEach((el) => el.classList.toggle('an', Number(el.dataset.i) === i));
-  }
-  if (quelle) quelle.classList.add('an');
+  /* Die Legende liegt im Off-Canvas, nicht mehr im Abschnitt des Diagramms */
+  document.querySelectorAll('#legende-liste .legende-zeile')
+    .forEach((el) => el.classList.toggle('an', Number(el.dataset.i) === i));
 }
 
 /* Ruhezustand: Box weg, Hervorhebung zurueck auf den gewaehlten Monat. */
@@ -2105,9 +2132,9 @@ function analyseWertZuruecksetzen(svg) {
   const tip = wrap && wrap.querySelector('.dia-tip');
   if (tip) { tip.hidden = true; tip.style.top = ''; }
   if (id === 'kostenanteile') {
+    analyseAnteilAktiv = null;
     svg.querySelectorAll('.stueck').forEach((el) => el.classList.remove('an'));
-    const abschnitt = svg.closest('section');
-    if (abschnitt) abschnitt.querySelectorAll('.legende-zeile').forEach((el) => el.classList.remove('an'));
+    document.querySelectorAll('#legende-liste .legende-zeile').forEach((el) => el.classList.remove('an'));
     return;
   }
   const jetztIndex = analyseReihe.findIndex((r) => r.monat === uebersichtMonat);
@@ -2126,8 +2153,6 @@ function analyseWertZuruecksetzen(svg) {
    Balken- und Verlaufsdiagramm kommt er aus der x-Position. */
 function analyseZeiger(e) {
   const svg = e.target.closest('svg.diagramm');
-  const zeile = e.target.closest && e.target.closest('.legende-zeile');
-  if (zeile) { analyseAnteilZeigen(zeile.closest('section').querySelector('svg.diagramm'), Number(zeile.dataset.i), zeile); return; }
   if (!svg) return;
   if (svg.dataset.dia === 'kostenanteile') {
     const stueck = e.target.closest('[data-i]');
@@ -2161,7 +2186,9 @@ document.addEventListener('contextmenu', (e) => {
    Kostengruppe aufgeteilt: eigene Kosten in ihrem Zahlungsmonat, Topfkosten
    als gleichbleibende Einzahlung. Die Stuecke ergeben darum zusammen genau
    die Einnahmen des Jahres. */
-const KUCHEN = { cx: 160, cy: 88, r: 64, ri: 37, hoehe: 182 };
+/* Der Ring nutzt die Breite fast aus; die Legende steht nicht mehr
+   darunter, sondern im Off-Canvas (legendeOeffnen). */
+const KUCHEN = { cx: 160, cy: 130, r: 118, ri: 66, hoehe: 262 };
 
 function kostenAnteileJahr() {
   const jahr = jahrVon(uebersichtMonat);
@@ -2204,13 +2231,19 @@ function kuchenDeckkraft(stueck, i, anzahl) {
   return (0.62 - (0.42 * (i - 1)) / stufen).toFixed(3);
 }
 
+/* Anteil eines Stuecks als Prozenttext — kleine Anteile mit einer
+   Nachkommastelle, damit sie nicht alle als "0 %" erscheinen. */
+function anteilText(anteil) {
+  return (anteil * 100).toFixed(anteil < 0.1 ? 1 : 0) + ' %';
+}
+
 function diagrammKostenanteile() {
-  const { stuecke, summe } = kostenAnteileJahr();
+  const { stuecke, summe, gespart } = kostenAnteileJahr();
   if (!stuecke.length || summe <= 0) {
     return '<p class="leer">Noch keine Kosten erfasst.</p>';
   }
   let winkel = -Math.PI / 2;
-  let ringe = '', legende = '';
+  let ringe = '', punkte = '';
   stuecke.forEach((st, i) => {
     const anteil = st.betrag / summe;
     const bis = winkel + anteil * 2 * Math.PI;
@@ -2221,15 +2254,80 @@ function diagrammKostenanteile() {
         KUCHEN.ri + ' ' + KUCHEN.ri + ' 0 1 0 ' + (2 * KUCHEN.ri) + ' 0 a ' + KUCHEN.ri + ' ' + KUCHEN.ri + ' 0 1 0 ' + (-2 * KUCHEN.ri) + ' 0 Z'
       : kreisbogen(winkel, bis, KUCHEN.r, KUCHEN.ri);
     ringe += '<path class="stueck" data-i="' + i + '" d="' + d + '" opacity="' + deck + '"/>';
-    legende += '<div class="row legende-zeile" data-i="' + i + '"><div class="name">' +
-      '<span class="punkt-farbe" style="opacity:' + deck + '"></span><b>' + escapeHtml(st.name) + '</b>' +
-      '<span class="anteil">' + (anteil * 100).toFixed(anteil < 0.1 ? 1 : 0) + ' %</span></div>' +
-      '<div class="mark">' + escapeHtml(formatCHF(st.betrag)) + '</div></div>';
+    punkte += '<span class="punkt-farbe" style="opacity:' + deck + '"></span>';
     winkel = bis;
   });
+  /* Die Mitte des Rings traegt die Bezugsgroesse. Nur wenn etwas uebrig
+     bleibt, entspricht die Summe den Einnahmen — sonst sind es die
+     Kosten, die die Einnahmen uebersteigen. */
+  const mitteTitel = gespart > 0 ? 'Einnahmen' : 'Kosten';
+  const mitte = '<text class="mitte-titel" x="' + KUCHEN.cx + '" y="' + (KUCHEN.cy - 8) +
+      '" text-anchor="middle">' + mitteTitel + '</text>' +
+    '<text class="mitte-wert" x="' + KUCHEN.cx + '" y="' + (KUCHEN.cy + 14) +
+      '" text-anchor="middle">' + escapeHtml(formatCHF(summe)) + '</text>';
+
   return '<svg class="diagramm" data-dia="kostenanteile" viewBox="0 0 ' + DIA.breite + ' ' + KUCHEN.hoehe +
-    '" role="img" aria-label="Anteile am Einkommen">' + ringe + '</svg>' +
-    '<div class="legende">' + legende + '</div>';
+    '" role="img" aria-label="Anteile am Einkommen">' + ringe + mitte + '</svg>' +
+    '<button type="button" class="legende-knopf" data-action="legende-oeffnen">' +
+    '<span class="legende-punkte">' + punkte + '</span>' +
+    '<span class="legende-text">Alle Anteile</span>' +
+    '<span class="legende-pfeil" aria-hidden="true">&rsaquo;</span></button>';
+}
+
+/* ---------- Legende als Off-Canvas ----------
+   Dieselben Zeilen wie bisher unter dem Diagramm, nur im Bottom Sheet.
+   Antippen schliesst das Sheet und hebt das Stueck im Ring hervor. */
+function legendeListeHTML() {
+  const { stuecke, summe } = analyseAnteile;
+  if (!stuecke.length || summe <= 0) return '<p class="leer">Noch keine Kosten erfasst.</p>';
+  return stuecke.map((st, i) => {
+    const anteil = st.betrag / summe;
+    const deck = kuchenDeckkraft(st, i, stuecke.length);
+    return '<div class="row legende-zeile' + (analyseAnteilAktiv === i ? ' an' : '') +
+      '" data-action="anteil-waehlen" data-i="' + i + '"><div class="name">' +
+      '<span class="punkt-farbe" style="opacity:' + deck + '"></span><b>' + escapeHtml(st.name) + '</b>' +
+      '<span class="anteil">' + anteilText(anteil) + '</span></div>' +
+      '<div class="mark">' + escapeHtml(formatCHF(st.betrag)) + '</div></div>';
+  }).join('');
+}
+
+function kuchenSvg() {
+  return document.querySelector('svg.diagramm[data-dia="kostenanteile"]');
+}
+
+let legendeOffen = false;
+let legendeAufraeumTimer = null;
+
+function legendeOeffnen() {
+  if (!analyseAnteile.stuecke.length) return;
+  clearTimeout(legendeAufraeumTimer);
+  legendeOffen = true;
+  $('legende-liste').innerHTML = legendeListeHTML();
+  aktualisiereScrollSperre();
+  const overlay = $('legende-overlay');
+  overlay.classList.add('sichtbar');
+  overlay.getBoundingClientRect(); /* Reflow erzwingen, damit die Transition greift */
+  requestAnimationFrame(() => requestAnimationFrame(() => overlay.classList.add('offen')));
+}
+
+function legendeSchliessen() {
+  if (!legendeOffen) return;
+  const overlay = $('legende-overlay'), sheet = $('legende-sheet');
+  legendeOffen = false;
+  overlay.classList.remove('offen');
+  clearTimeout(legendeAufraeumTimer);
+  const aufraeumen = () => {
+    clearTimeout(legendeAufraeumTimer);
+    if (legendeOffen) return; /* zwischenzeitlich wieder geoeffnet, siehe sheetSchliessen */
+    overlay.classList.remove('sichtbar');
+    aktualisiereScrollSperre();
+  };
+  if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+    aufraeumen();
+  } else {
+    sheet.addEventListener('transitionend', aufraeumen, { once: true });
+    legendeAufraeumTimer = setTimeout(aufraeumen, 400);
+  }
 }
 
 const ANALYSE_DIAGRAMME = [
@@ -2258,7 +2356,7 @@ const ANALYSE_DIAGRAMME = [
   {
     id: 'kostenanteile',
     titel: 'Wohin das Geld geht',
-    hinweis: 'Anteil jeder Kostengruppe am Einkommen des Jahres, dazu der gesparte Teil. Antippen zeigt Betrag und Anteil.',
+    hinweis: 'Anteil jeder Kostengruppe am Einkommen des Jahres, dazu der gesparte Teil. Ein Stück antippen zeigt Betrag und Anteil, „Alle Anteile" die vollständige Liste.',
     info: [
       ['Grundlage', 'dieselbe Rechnung wie der Sparbetrag: eigene Kosten im Zahlungsmonat, Topfkosten als gleichbleibende Einzahlung'],
       ['Summe', 'alle Stücke zusammen ergeben die Einnahmen des Jahres'],
@@ -2273,6 +2371,7 @@ function renderAnalyse() {
   const leer = reihe.every((r) => r.einnahmen === 0 && r.kosten === 0);
   if (leer) {
     analyseReihe = []; analyseKumuliert = [];
+    analyseAnteile = { stuecke: [], summe: 0, winkel: [] }; analyseAnteilAktiv = null;
     $('analyse-liste').innerHTML = '<section><p class="leer">Noch keine Einnahmen und Kosten erfasst. ' +
       'Sobald im Budget etwas steht, erscheinen hier die Auswertungen.</p></section>';
     return;
@@ -2282,6 +2381,7 @@ function renderAnalyse() {
   analyseKumuliert = reihe.map((r) => { lauf += r.wert; return lauf; });
 
   analyseAnteile = kostenAnteileJahr();
+  analyseAnteilAktiv = null; /* neue Zahlen, alte Hervorhebung passt nicht mehr */
   /* Mittelwinkel je Stueck merken, damit die Wertbox ueber dem Bogen sitzt */
   let w = -Math.PI / 2;
   analyseAnteile.winkel = analyseAnteile.stuecke.map((st) => {
@@ -2539,6 +2639,7 @@ function allesZuruecksetzen() {
   if (!confirm('Wirklich alle Daten löschen? Personen, Einnahmen, Kostenstellen und Töpfe werden unwiderruflich entfernt.')) return;
   if (sheetOffen) sheetSchliessen();
   if (wizardOffen) wizardSchliessen(false);
+  legendeSchliessen();
   dok = leeresDokument();
   uebersichtMonat = clampMonat(monatHeute());
   renderAlles(); sichern();
@@ -2667,6 +2768,12 @@ function behandeln(action, el) {
     }
     case 'wizard-einnahme-13tes': wizardEinnahme13tesUmschalten(d.id, el.checked); break;
     case 'wizard-modus': wizardModus = d.modus; renderWizardSchritt(); break;
+    case 'legende-oeffnen': legendeOeffnen(); break;
+    case 'legende-schliessen': legendeSchliessen(); break;
+    /* Schliesst das Off-Canvas und hebt das Stueck im Ring hervor — der
+       Ring steht direkt ueber dem Knopf, die Seite scrollt beim Oeffnen
+       nicht, das Stueck ist danach also sichtbar. */
+    case 'anteil-waehlen': legendeSchliessen(); analyseAnteilZeigen(kuchenSvg(), Number(d.i)); break;
     case 'alles-zuruecksetzen': allesZuruecksetzen(); break;
   }
 }
@@ -2675,6 +2782,7 @@ document.addEventListener('click', (e) => {
   if (e.target.id === 'info-overlay') { infoSchliessen(); return; }
   if (e.target.id === 'sheet-overlay') { sheetVerwerfen(); return; }
   if (e.target.id === 'wizard-overlay') { wizardSchliessen(false); return; }
+  if (e.target.id === 'legende-overlay') { legendeSchliessen(); return; }
   const el = e.target.closest('[data-action]');
   if (el) {
     if (wizardOffen) wizardFeldUebernehmen();
@@ -2733,6 +2841,7 @@ $('sicherung-datei').addEventListener('change', (e) => {
       dok = migrieren(roh);
       if (sheetOffen) sheetSchliessen();
       if (wizardOffen) wizardSchliessen(false);
+      legendeSchliessen();
       uebersichtMonat = clampMonat(monatHeute());
       renderAlles(); sichern();
       log('Sicherung geladen: ' + f.name);
