@@ -99,11 +99,6 @@ input[type=text]{font-family:var(--sans)}
   padding:0 0 0 4px;cursor:pointer;vertical-align:1px}
 input:focus-visible,button:focus-visible,select:focus-visible{outline:2px solid var(--ok);outline-offset:2px}
 
-.monatsraster{display:grid;grid-template-columns:repeat(6,1fr);gap:6px}
-.monatsraster button{padding:8px 0;font-size:12px;border-radius:7px;border:1px solid var(--rule);
-  background:var(--paper);color:var(--ink);font-family:var(--sans)}
-.monatsraster button.an{background:var(--ok);border-color:var(--ok);color:var(--card);font-weight:600}
-
 .note{font-size:12.5px;color:var(--ink-soft);margin:0}
 
 .btns{display:flex;flex-wrap:wrap;gap:8px;margin:14px 0 16px}
@@ -115,7 +110,7 @@ button{
 button.ghost{background:transparent;color:var(--ink);border-color:var(--rule)}
 button.klein{padding:6px 11px;font-size:12.5px}
 button:active{opacity:.72}
-.gruppenkopf button{padding:6px 11px;font-size:12.5px}
+.gruppenkopf button{padding:6px 11px;font-size:12.5px;white-space:nowrap;flex:0 0 auto}
 
 /* Kassabuch-Zeile fuer Uebersicht */
 .row{display:flex;align-items:baseline;gap:12px;padding:11px 0;border-bottom:1px solid var(--rule)}
@@ -358,10 +353,10 @@ nav.tabbar button:active{opacity:.7}
     <!-- ===================== Budget ===================== -->
     <section class="page" id="seite-budget" style="background:transparent;border:0;padding:0;margin:0">
       <div class="tabkopf">
-        <div class="segment" id="budget-segment">
-          <button type="button" data-action="budget-gruppierung" data-gruppierung="gruppe">Nach Gruppe</button>
-          <button type="button" data-action="budget-gruppierung" data-gruppierung="traeger">Nach Träger</button>
-        </div>
+        <select id="budget-gruppierung" data-action="budget-gruppierung" aria-label="Gliederung">
+          <option value="gruppe">Nach Gruppe</option>
+          <option value="traeger">Nach Träger</option>
+        </select>
         <button type="button" class="ghost klein" data-action="inaktive-umschalten" data-tab="budget" id="umschalt-budget">Inaktive: aus</button>
       </div>
 
@@ -949,15 +944,6 @@ function setzeAktiv(entity, id, wert) {
   sichern(); renderAktuellerTab();
 }
 
-function monatTogglen(entity, id, m) {
-  const o = findeObjekt(entity, id); if (!o) return;
-  const arr = o.faelligMonate || (o.faelligMonate = []);
-  const idx = arr.indexOf(m);
-  if (idx > -1) arr.splice(idx, 1); else arr.push(m);
-  arr.sort((a, b) => a - b);
-  sichern(); renderAktuellerTab();
-}
-
 /* Entfernt einen Eintrag bedingungslos aus dem Dokument. Nur zulaessig fuer
    einen Eintrag, der gerade erst im Sheet angelegt und nie bestaetigt
    wurde (siehe sheetVerwerfen/sheetUebernehmen) — kein Verstoss gegen das
@@ -1303,9 +1289,7 @@ function wizardEinnahmeFormHTML(e) {
     (e.art === 'Nettolohn' ? wizard13tesHTML(e) : '') +
     auswahlHTML('Person', 'einnahme', e.id, 'personId', e.personId, dok.personen.map((p) => [p.id, personName(p.id)])) +
     auswahlHTML('Rhythmus', 'einnahme', e.id, 'rhythmus', e.rhythmus, RHYTHMEN) +
-    (e.rhythmus === 'monatlich' || wizardModus === 'einfach' ? '' :
-      '<div class="feld"><label>Fälligkeitsmonate</label>' + monatsRasterHTML('einnahme', e.id, e.faelligMonate) +
-      '<p class="note" style="margin-top:8px">Monat der tatsächlichen Zahlung.</p></div>') +
+    (wizardModus === 'einfach' ? '' : faelligFeldHTML('einnahme', e)) +
     '</div>';
 }
 
@@ -1341,9 +1325,7 @@ function wizardPostenFormHTML(p, k) {
       [['D', 'D — Dauerauftrag'], ['R', 'R — Rückstellung'], ['V', 'V — Variabel']]) +
     auswahlHTML('Träger', 'budgetposten', p.id, 'traeger', p.traeger, null, traegerOptionsHTML(p.traeger)) +
     auswahlHTML('Rhythmus', 'budgetposten', p.id, 'rhythmus', p.rhythmus, RHYTHMEN) +
-    (p.rhythmus === 'monatlich' || wizardModus === 'einfach' ? '' :
-      '<div class="feld"><label>Fälligkeitsmonate</label>' + monatsRasterHTML('budgetposten', p.id, p.faelligMonate) +
-      '<p class="note" style="margin-top:8px">Monat der tatsächlichen Zahlung.</p></div>') +
+    (wizardModus === 'einfach' ? '' : faelligFeldHTML('budgetposten', p)) +
     '</div>';
 }
 
@@ -1686,15 +1668,76 @@ function monatJahrGeaendert(el) {
   }
 }
 
-function monatsRasterHTML(entity, id, ausgewaehlt) {
-  ausgewaehlt = ausgewaehlt || [];
-  let html = '<div class="monatsraster">';
-  for (let m = 1; m <= 12; m++) {
-    html += '<button type="button" data-action="monat-toggle" data-entity="' + entity + '" data-id="' + id +
-      '" data-monat="' + m + '" class="' + (ausgewaehlt.includes(m) ? 'an' : '') + '">' + MONATSKUERZEL[m - 1] + '</button>';
-  }
-  return html + '</div>';
+/* Aus Rhythmus und erstem Zahlungsmonat ergeben sich alle weiteren:
+   halbjaehrlich ab Februar heisst Februar und August. Die Anzahl deckt
+   sich mit GLAETTUNG — vierteljaehrlich sind vier Zahlungen im Jahr. */
+const FAELLIG_ANZAHL = { vierteljaehrlich: 4, halbjaehrlich: 2, jaehrlich: 1, einmalig: 1 };
+
+function faelligMonateAus(rhythmus, ersterMonat) {
+  const anzahl = FAELLIG_ANZAHL[rhythmus];
+  if (!anzahl || !ersterMonat) return [];
+  const schritt = 12 / anzahl;
+  return Array.from({ length: anzahl }, (unused, i) => ((ersterMonat - 1 + i * schritt) % 12) + 1)
+    .sort((a, b) => a - b);
 }
+
+function aufzaehlung(teile) {
+  if (teile.length < 2) return teile.join('');
+  return teile.slice(0, -1).join(', ') + ' und ' + teile[teile.length - 1];
+}
+
+function faelligText(monate) {
+  return monate && monate.length
+    ? 'Zahlung im ' + aufzaehlung(monate.map((m) => MONATSNAMEN[m - 1])) + '.'
+    : 'Ohne Monat wird der Betrag gleichmässig über zwölf Monate verteilt.';
+}
+
+/* Ein Auswahlfeld statt zwoelf Knoepfe: gewaehlt wird nur die erste
+   Zahlung, der Rest ergibt sich aus dem Rhythmus. Bei "monatlich" hat
+   das Feld keine Bedeutung und entfaellt ganz. */
+function faelligFeldHTML(entity, obj) {
+  if (obj.rhythmus === 'monatlich') return '';
+  const erster = (obj.faelligMonate && obj.faelligMonate[0]) || 0;
+  const anzahl = FAELLIG_ANZAHL[obj.rhythmus] || 1;
+  const opts = '<option value=""' + (erster ? '' : ' selected') + '>Gleichmässig verteilt</option>' +
+    MONATSNAMEN.map((n, i) => '<option value="' + (i + 1) + '"' +
+      (erster === i + 1 ? ' selected' : '') + '>' + n + '</option>').join('');
+  return '<div class="feld"><label>Erste Zahlung' + infoKnopfHTML([
+      ['Nur die erste Zahlung wählen', 'die weiteren Termine ergeben sich aus dem Rhythmus'],
+      ['Beispiel', 'halbjährlich mit Februar bedeutet Februar und August'],
+      ['Dieser Posten', anzahl > 1 ? anzahl + ' Zahlungen pro Jahr' : 'eine Zahlung pro Jahr'],
+      ['Ohne Monat', 'der Betrag wird gleichmässig über zwölf Monate verteilt']
+    ]) + '</label>' +
+    '<select data-action="faellig-monat" data-entity="' + entity + '" data-id="' + obj.id + '">' + opts + '</select>' +
+    '<p class="note faellig-note" style="margin-top:8px">' + escapeHtml(faelligText(obj.faelligMonate)) + '</p></div>';
+}
+
+/* Setzt die abgeleiteten Monate und frischt nur den Hinweis auf — ein
+   Neuaufbau des Formulars wuerde offene Eingaben verwerfen. */
+function faelligMonatGewaehlt(el) {
+  const obj = findeObjekt(el.dataset.entity, el.dataset.id);
+  if (!obj) return;
+  obj.faelligMonate = faelligMonateAus(obj.rhythmus, Number(el.value) || 0);
+  sichern();
+  const feld = el.closest('.feld');
+  const note = feld && feld.querySelector('.faellig-note');
+  if (note) note.textContent = faelligText(obj.faelligMonate);
+  renderNurTab();
+}
+
+/* Baut den Inhalt des offenen Erfassen-Sheets neu auf — noetig, wenn ein
+   Feld die Form des Formulars aendert (Rhythmus blendet die Faelligkeit
+   ein oder aus). Scrollposition bleibt erhalten. */
+function sheetInhaltNeu() {
+  if (!sheetOffen) return;
+  const obj = findeObjekt(sheetOffen.entity, sheetOffen.id);
+  if (!obj) return;
+  const inhalt = $('sheet-inhalt');
+  const pos = inhalt.scrollTop;
+  inhalt.innerHTML = entityFormHTML(sheetOffen.entity, obj);
+  inhalt.scrollTop = pos;
+}
+
 
 function traegerOptionsHTML(aktuellerWert) {
   let html = '<optgroup label="Personen">';
@@ -1739,6 +1782,12 @@ function zeileHTML(label, betrag, betont) {
     klasse + '">' + formatCHF(betrag) + '</div></div>';
 }
 
+/* Feste Reihenfolge im Budget-Tab; unbekannte Gruppen folgen danach
+   alphabetisch. Die Einnahmen stehen als eigener Abschnitt darueber. */
+const GRUPPEN_REIHENFOLGE = ['Wohnkosten', 'Auto', 'Energie und Kommunikation', 'Haushalt',
+  'Öffentlicher Verkehr', 'Rückstellungen', 'Steuern', 'Versicherungen und Vorsorge',
+  'Persönliche Ausgaben'];
+
 const GRUPPEN_VORSCHLAEGE = ['Wohnkosten','Energie und Kommunikation','Steuern','Versicherungen und Vorsorge',
   'Öffentlicher Verkehr','Auto','Verschiedenes','Haushalt','Persönliche Ausgaben','Rückstellungen'];
 
@@ -1767,8 +1816,7 @@ function einnahmeFormHTML(e) {
       auswahlHTML('Person', 'einnahme', e.id, 'personId', e.personId, dok.personen.map((p) => [p.id, personName(p.id)])) +
     '</div>' +
     auswahlHTML('Rhythmus', 'einnahme', e.id, 'rhythmus', e.rhythmus, RHYTHMEN) +
-    '<div class="feld"><label>Fälligkeitsmonate</label>' + monatsRasterHTML('einnahme', e.id, e.faelligMonate) +
-      '<p class="note" style="margin-top:8px">Bei «monatlich» ohne Bedeutung.</p></div>' +
+    faelligFeldHTML('einnahme', e) +
     monatJahrFeldHTML('Gültig ab', 'einnahme', e.id, 'gueltigAb', e.gueltigAb, false) +
     monatJahrFeldHTML('Gültig bis', 'einnahme', e.id, 'gueltigBis', e.gueltigBis, true) +
     '</div>';
@@ -1795,8 +1843,7 @@ function postenFormHTML(p, k) {
     '</div>' +
     auswahlHTML('Träger', 'budgetposten', p.id, 'traeger', p.traeger, null, traegerOptionsHTML(p.traeger)) +
     auswahlHTML('Rhythmus', 'budgetposten', p.id, 'rhythmus', p.rhythmus, RHYTHMEN) +
-    '<div class="feld"><label>Fälligkeitsmonate</label>' + monatsRasterHTML('budgetposten', p.id, p.faelligMonate) +
-      '<p class="note" style="margin-top:8px">Bei «monatlich» ohne Bedeutung. Sonst: Monat der tatsächlichen Zahlung.</p></div>' +
+    faelligFeldHTML('budgetposten', p) +
     monatJahrFeldHTML('Gültig ab', 'budgetposten', p.id, 'gueltigAb', p.gueltigAb, false) +
     monatJahrFeldHTML('Gültig bis', 'budgetposten', p.id, 'gueltigBis', p.gueltigBis, true) +
     '</div>';
@@ -1826,7 +1873,13 @@ function budgetNachGruppeHTML(posten) {
     const g = k.gruppe && k.gruppe.trim() ? k.gruppe : 'Ohne Gruppe';
     (gruppen[g] = gruppen[g] || []).push(p);
   });
-  return Object.keys(gruppen).sort((a, b) => a.localeCompare(b, 'de-CH')).map((g) =>
+  const rang = (g) => {
+    const i = GRUPPEN_REIHENFOLGE.indexOf(g);
+    return i > -1 ? i : GRUPPEN_REIHENFOLGE.length;
+  };
+  return Object.keys(gruppen)
+    .sort((a, b) => (rang(a) - rang(b)) || a.localeCompare(b, 'de-CH'))
+    .map((g) =>
     '<section><div class="gruppenkopf"><h3>' + escapeHtml(g) + '</h3>' +
     kopfsummeHTML(gruppen[g]) +
     '<button type="button" data-action="posten-neu" data-gruppe="' + escapeHtml(g) + '">+ Posten</button></div>' +
@@ -1860,9 +1913,7 @@ function renderBudget() {
   aktualisiereGruppenListe();
   const zeigeInaktiv = inaktiveSichtbar.budget;
   $('umschalt-budget').textContent = 'Inaktive: ' + (zeigeInaktiv ? 'ein' : 'aus');
-  document.querySelectorAll('#budget-segment button').forEach((b) => {
-    b.classList.toggle('an', b.dataset.gruppierung === budgetGruppierung);
-  });
+  $('budget-gruppierung').value = budgetGruppierung;
 
   const einnahmenListe = dok.einnahmen.filter((e) => zeigeInaktiv || e.aktiv);
   $('summe-einnahmen').textContent = formatCHF(summeDurchschnitt(einnahmenListe.filter((e) => e.aktiv)));
@@ -2392,11 +2443,9 @@ function behandeln(action, el) {
     case 'sheet-umschalten-aktiv': sheetUmschaltenAktiv(); break;
     case 'info-oeffnen': infoOeffnen(d.punkte); break;
     case 'info-schliessen': infoSchliessen(); break;
-    case 'monat-toggle': monatTogglen(d.entity, d.id, Number(d.monat)); break;
     case 'zeit-zurueck': zeitWechseln(-1); break;
     case 'zeit-vor': zeitWechseln(1); break;
     case 'sicht': sichtWechseln(d.sicht); break;
-    case 'budget-gruppierung': budgetGruppierung = d.gruppierung; renderBudget(); break;
     case 'sicherung-teilen': sicherungTeilen(); break;
     case 'sicherung-herunterladen': sicherungHerunterladen(); break;
     case 'sicherung-kopieren': sicherungKopieren(); break;
@@ -2446,8 +2495,24 @@ document.addEventListener('change', (e) => {
   if (gEl) { wizardGruppeGewaehlt(gEl); return; }
   const mmEl = e.target.closest('[data-action="wizard-13tes-monat"]');
   if (mmEl) { wizard13tesMonatGewaehlt(mmEl); return; }
+  const fEl = e.target.closest('[data-action="faellig-monat"]');
+  if (fEl) { faelligMonatGewaehlt(fEl); return; }
+  const bEl = e.target.closest('[data-action="budget-gruppierung"]');
+  if (bEl) { budgetGruppierung = bEl.value; renderBudget(); return; }
   const el = e.target.closest('[data-feld]');
   if (!el) return;
+  /* Der Rhythmus bestimmt, wie viele Zahlungen im Jahr anfallen und ob es
+     ueberhaupt ein Faelligkeitsfeld gibt — die Monate werden darum neu
+     abgeleitet und das Formular neu aufgebaut. */
+  if (el.dataset.feld === 'rhythmus') {
+    feldGeaendert(el, false);
+    const obj = findeObjekt(el.dataset.entity, el.dataset.id);
+    if (obj) obj.faelligMonate = faelligMonateAus(obj.rhythmus, (obj.faelligMonate || [])[0] || 0);
+    sichern();
+    sheetInhaltNeu();
+    renderAktuellerTab();
+    return;
+  }
   if (el.tagName === 'SELECT' || el.type === 'month' || el.type === 'date') feldGeaendert(el, true);
   /* Ausnahme: die Art einer Einnahme steuert im Assistenten, ob die
      "13. Monatslohn"-Checkbox erscheint — beim Verlassen des Feldes
