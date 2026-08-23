@@ -34,4 +34,9 @@
 - Tabellen mit mehr als 2 Spalten auf dem Handy
 - Emoji als Icons
 - Mehr als eine Akzentfarbe
-- Rot ausser bei echten Fehlern
+- Rot ausser bei echten Fehlern und bei einem negativen Ergebnis
+
+Zur letzten Regel: Ein negativer Sparbetrag ist kein Programmfehler, soll
+aber sofort auffallen. Ergebniszahlen — die grosse Kennzahl und die
+betonte Schlusszeile eines Blocks — sind darum grün im Plus und rot im
+Minus. Für alles andere gilt die Regel unverändert.

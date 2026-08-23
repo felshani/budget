@@ -120,7 +120,8 @@ button:active{opacity:.72}
 .mark{font-family:var(--mono);font-size:13px;letter-spacing:.02em;font-variant-numeric:tabular-nums;
   text-align:right;white-space:nowrap;color:var(--ink-soft)}
 .mark.ok{color:var(--ok);font-weight:650}
-.mark.stark{color:var(--ink);font-weight:650}
+/* Negatives Ergebnis: rot, damit es auffaellt (siehe DESIGN.md) */
+.mark.stark{color:var(--stamp);font-weight:650}
 
 /* Gemeinsame Zeitraumwahl ueber Uebersicht, Budget und Analyse */
 .zeitraum{display:flex;flex-direction:column;align-items:center;gap:10px;margin:0 0 18px}
@@ -174,6 +175,8 @@ button:active{opacity:.72}
 .hero-label{margin:0 0 6px;font-size:13px;color:var(--ink-soft);text-transform:uppercase;letter-spacing:.05em}
 .hero-zahl{margin:0;font-size:44px;font-weight:650;font-family:var(--mono);letter-spacing:-.01em;
   font-variant-numeric:tabular-nums;color:var(--ink)}
+.hero-zahl.plus{color:var(--ok)}
+.hero-zahl.minus{color:var(--stamp)}
 .hero-sub{margin:6px 0 0;font-size:17px;color:var(--ink-soft)}
 
 .log{font-family:var(--mono);font-size:12px;line-height:1.6;color:var(--ink-soft);
@@ -787,6 +790,13 @@ function summeZeitraum(liste) {
 function summeDurchschnitt(liste) {
   const faktor = uebersichtSicht === 'jahr' ? 12 : 1;
   return liste.reduce((a, x) => a + betragGeglaettet(x), 0) * faktor;
+}
+
+/* Der gewaehlte Zeitraum als Monatsliste. Alle Bestandteile des
+   Sparbetrags werden darueber gerechnet — sonst zaehlt ein Teil zwoelf
+   Monate, waehrend ein anderer wegen gueltigAb nur wenige zaehlt. */
+function zeitraumMonate() {
+  return uebersichtSicht === 'jahr' ? monateImJahr(jahrVon(uebersichtMonat)) : [uebersichtMonat];
 }
 
 function zeitraumLabel() {
@@ -2199,17 +2209,19 @@ function renderMehr() {
 function renderUebersicht() {
   const monat = uebersichtMonat;
   const jahr = uebersichtSicht === 'jahr';
-  const postenGueltig = dok.budgetposten.filter((p) => istGueltig(p, monat));
+  const monate = zeitraumMonate();
 
   /* Sparbetrag aus Sicht der privaten Konten: Lohn minus eigene Kosten
-     minus die feste Topfeinzahlung. Was die Toepfe spaeter bezahlen,
-     beruehrt das private Konto nicht und steht darum hier nicht. */
+     minus die feste Topfeinzahlung. Alle drei ueber dieselben Monate. */
   const einnahmen = summeZeitraum(dok.einnahmen);
   const eigene = summeZeitraum(eigenePosten(dok.budgetposten));
-  const einzahlung = einzahlungInToepfe(monat) * (jahr ? 12 : 1);
+  const einzahlung = monate.reduce((a, m) => a + einzahlungInToepfe(m), 0);
   const sparbetrag = einnahmen - eigene - einzahlung;
 
-  $('hero-zahl').textContent = formatCHF(sparbetrag);
+  const heroEl = $('hero-zahl');
+  heroEl.textContent = formatCHF(sparbetrag);
+  heroEl.classList.toggle('minus', sparbetrag < 0);
+  heroEl.classList.toggle('plus', sparbetrag >= 0);
   $('hero-sub').textContent = jahr ? 'im Jahr ' + jahrVon(monat) : 'im ' + monatLabel(monat);
 
   $('uebersicht-brutto-titel').innerHTML = (jahr ? 'Im Jahr ' + jahrVon(monat) : 'In diesem Monat') +
@@ -2227,12 +2239,37 @@ function renderUebersicht() {
     zeileHTML('Bleibt zum Sparen', sparbetrag, true);
 
   $('uebersicht-brutto-note').textContent = jahr
-    ? 'Alle zwölf Monate des Jahres zusammengezählt.'
+    ? 'Alle zwölf Monate des Jahres zusammengezählt. Posten zählen nur in den Monaten, in denen sie gültig sind.'
     : 'Die Einzahlung in die Töpfe ist jeden Monat gleich hoch. Der Betrag ändert sich nur, wenn eigene Rechnungen anfallen oder der 13. Monatslohn kommt.';
 
-  const anteile = einkommensAnteile(monat);
-  const summeProPerson = {}; dok.personen.forEach((p) => { summeProPerson[p.id] = 0; });
+  /* Topfkosten und Beitraege je Monat aufsummieren: der Verteilschluessel
+     haengt an den Einnahmen des jeweiligen Monats. */
   const aktiveToepfe = dok.toepfe.filter((t) => t.aktiv);
+  const kostenProTopf = {};
+  const beitragProTopf = {};
+  const summeProPerson = {};
+  dok.personen.forEach((p) => { summeProPerson[p.id] = 0; });
+  aktiveToepfe.forEach((t) => {
+    kostenProTopf[t.id] = 0;
+    beitragProTopf[t.id] = {};
+    dok.personen.forEach((p) => { beitragProTopf[t.id][p.id] = 0; });
+  });
+
+  monate.forEach((m) => {
+    const anteileM = einkommensAnteile(m);
+    aktiveToepfe.forEach((t) => {
+      const kostenM = dok.budgetposten
+        .filter((p) => p.traeger === t.id && istGueltig(p, m))
+        .reduce((a, p) => a + betragGeglaettet(p), 0);
+      kostenProTopf[t.id] += kostenM;
+      const verteilung = anteilProTopf(t, anteileM);
+      dok.personen.forEach((p) => {
+        const beitrag = kostenM * (Number(verteilung[p.id]) || 0) / 100;
+        beitragProTopf[t.id][p.id] += beitrag;
+        summeProPerson[p.id] += beitrag;
+      });
+    });
+  });
 
   $('uebersicht-toepfe-titel').innerHTML = 'Beitrag an die Töpfe, ' + proZeitraum() +
     infoKnopfHTML([
@@ -2246,15 +2283,11 @@ function renderUebersicht() {
   } else {
     let html = ''; let summeKosten = 0;
     aktiveToepfe.forEach((t) => {
-      const kostenTopf = summeDurchschnitt(postenGueltig.filter((p) => p.traeger === t.id));
-      summeKosten += kostenTopf;
-      const anteilePersonen = anteilProTopf(t, anteile);
+      summeKosten += kostenProTopf[t.id];
       html += '<section><h2>' + escapeHtml(t.name || '(ohne Bezeichnung)') + '</h2>' +
-        zeileHTML('Kosten', kostenTopf);
+        zeileHTML('Kosten', kostenProTopf[t.id]);
       dok.personen.forEach((p) => {
-        const beitrag = kostenTopf * (Number(anteilePersonen[p.id]) || 0) / 100;
-        summeProPerson[p.id] += beitrag;
-        html += zeileHTML(personName(p.id), beitrag);
+        html += zeileHTML(personName(p.id), beitragProTopf[t.id][p.id]);
       });
       html += '</section>';
     });
