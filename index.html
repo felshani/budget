@@ -27,6 +27,9 @@
     --paper:#131917; --card:#1B2321; --ink:#E4EAE6; --ink-soft:#8FA098;
     --rule:#2E3A36; --stamp:#E2705C; --ok:#57C4A5;
   }
+  select{
+    background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 8'%3E%3Cpath d='M1 1.6 6 6.4 11 1.6' fill='none' stroke='%238FA098' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  }
 }
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
 html,body{margin:0}
@@ -59,7 +62,9 @@ section.plain{padding-bottom:16px}
 h2{font-size:12px;letter-spacing:.09em;text-transform:uppercase;color:var(--ink-soft);
    font-weight:600;margin:0 0 12px}
 
-.tabkopf{display:flex;justify-content:flex-end;margin-bottom:10px}
+.tabkopf{display:flex;align-items:center;justify-content:flex-end;gap:10px;margin-bottom:10px}
+.tabkopf select{flex:1;min-width:0}
+.tabkopf .ghost{white-space:nowrap;flex:0 0 auto}
 
 .gruppenkopf{display:flex;align-items:baseline;justify-content:space-between;gap:10px;margin:0 0 4px}
 .gruppenkopf h3{font-size:13px;text-transform:uppercase;letter-spacing:.06em;color:var(--ink-soft);margin:0;font-weight:650}
@@ -91,7 +96,16 @@ input[type=text],input[type=number],input[type=month],input[type=date],select{
   padding:11px 12px;border:1px solid var(--rule);border-radius:9px;
   background:var(--paper);color:var(--ink);
 }
-select{font-family:var(--sans);-webkit-appearance:none;appearance:none}
+/* Auswahlfelder brauchen einen sichtbaren Hinweis, dass sie aufklappen —
+   ohne Pfeil sehen sie wie unveraenderlicher Text aus. Der Pfeil steckt als
+   Hintergrundbild drin, damit kein zusaetzliches Markup noetig ist; die
+   Farbe ist je Erscheinungsbild einmal gesetzt (siehe dunkle Variante). */
+select{
+  font-family:var(--sans);-webkit-appearance:none;appearance:none;
+  padding-right:36px;background-repeat:no-repeat;
+  background-position:right 12px center;background-size:12px 8px;
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 8'%3E%3Cpath d='M1 1.6 6 6.4 11 1.6' fill='none' stroke='%235C6B65' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+}
 /* Monospace ist fuer Zahlen gedacht (DESIGN.md) — Namen und Bezeichnungen
    stehen in der Proportionalschrift. */
 input[type=text]{font-family:var(--sans)}
@@ -147,7 +161,20 @@ button:active{opacity:.72}
 .unterkopf .kopfsumme{font-size:12.5px;color:var(--ink-soft)}
 
 /* Diagramme im Analyse-Tab: schlichtes Inline-SVG, keine Bibliothek */
-.diagramm{width:100%;height:auto;display:block;margin:2px 0 4px;overflow:visible}
+/* Langes Draufbleiben darf auf dem iPhone kein "Kopieren/Nachschlagen"
+   aufrufen — das Diagramm ist kein Text zum Markieren. */
+.dia-wrap{position:relative}
+.diagramm{width:100%;height:auto;display:block;margin:2px 0 4px;overflow:visible;
+  -webkit-touch-callout:none;-webkit-user-select:none;user-select:none;touch-action:pan-y}
+/* Kleine Box mit dem Wert des beruehrten Monats */
+.dia-tip{
+  position:absolute;top:0;transform:translateX(-50%);pointer-events:none;
+  background:var(--ink);color:var(--card);border-radius:8px;padding:5px 9px;
+  font-size:12px;white-space:nowrap;z-index:2;box-shadow:0 2px 8px rgba(0,0,0,.18);
+}
+.dia-tip[hidden]{display:none}
+.dia-tip b{font-family:var(--sans);font-weight:650;margin-right:5px}
+.dia-tip span{font-family:var(--mono);font-variant-numeric:tabular-nums}
 .diagramm .achse{stroke:var(--rule);stroke-width:1}
 .diagramm .balken{fill:var(--ok);opacity:.45}
 .diagramm .balken.jetzt{opacity:1}
@@ -2031,12 +2058,25 @@ function diagrammErspartesKumuliert(reihe) {
 }
 
 /* Zeigt Monat und Betrag ueber dem Diagramm an und hebt die Stelle hervor. */
+/* Zeigt den Wert des beruehrten Monats in einer kleinen Box ueber der
+   Stelle und hebt sie im Diagramm hervor. Die Bildunterschrift bleibt als
+   ruhende Zusammenfassung stehen. */
 function analyseWertZeigen(svg, i) {
   const id = svg.dataset.dia;
   const wert = id === 'sparbetrag-monat' ? (analyseReihe[i] || {}).wert : analyseKumuliert[i];
-  const el = $('dia-wert-' + id);
-  if (el) el.innerHTML = '<b>' + MONATSNAMEN[i] + '</b> · ' + escapeHtml(formatCHF(wert || 0));
-  svg.querySelectorAll('.balken').forEach((b) => b.classList.toggle('jetzt', Number(b.dataset.i) === i));
+
+  const wrap = svg.closest('.dia-wrap');
+  const tip = wrap && wrap.querySelector('.dia-tip');
+  if (tip) {
+    tip.innerHTML = '<b>' + MONATSKUERZEL[i] + '</b><span>' + escapeHtml(formatCHF(wert || 0)) + '</span>';
+    tip.hidden = false;
+    const breite = wrap.clientWidth;
+    const halb = tip.offsetWidth / 2;
+    const x = diaX(i) / DIA.breite * breite;
+    tip.style.left = Math.max(halb, Math.min(breite - halb, x)) + 'px';
+  }
+
+  svg.querySelectorAll('.balken').forEach((el) => el.classList.toggle('jetzt', Number(el.dataset.i) === i));
   const marker = svg.querySelector('.marker');
   if (marker) {
     const ys = (svg.querySelector('.ypos') || {}).dataset;
@@ -2051,10 +2091,13 @@ function analyseWertZeigen(svg, i) {
   }
 }
 
-/* Ohne Beruehrung: aktueller Monat bzw. Jahresende. */
+/* Ruhezustand: Box weg, Hervorhebung zurueck auf den gewaehlten Monat. */
 function analyseWertZuruecksetzen(svg) {
   const id = svg.dataset.dia;
   const el = $('dia-wert-' + id);
+  const wrap = svg.closest('.dia-wrap');
+  const tip = wrap && wrap.querySelector('.dia-tip');
+  if (tip) tip.hidden = true;
   const jetztIndex = analyseReihe.findIndex((r) => r.monat === uebersichtMonat);
   if (id === 'sparbetrag-monat') {
     const i = jetztIndex > -1 ? jetztIndex : 0;
@@ -2079,10 +2122,18 @@ function analyseZeiger(e) {
 
 document.addEventListener('pointermove', analyseZeiger);
 document.addEventListener('pointerdown', analyseZeiger);
-document.addEventListener('pointerleave', (e) => {
-  const svg = e.target.closest && e.target.closest('svg.diagramm');
-  if (svg) analyseWertZuruecksetzen(svg);
-}, true);
+/* Zweiter Riegel gegen das Langdruck-Menue: -webkit-touch-callout kennt
+   nur Safari, das contextmenu-Ereignis feuern alle. */
+document.addEventListener('contextmenu', (e) => {
+  if (e.target.closest && e.target.closest('svg.diagramm')) e.preventDefault();
+});
+
+['pointerleave', 'pointercancel'].forEach((art) => {
+  document.addEventListener(art, (e) => {
+    const svg = e.target.closest && e.target.closest('svg.diagramm');
+    if (svg) analyseWertZuruecksetzen(svg);
+  }, true);
+});
 
 const ANALYSE_DIAGRAMME = [
   {
@@ -2125,7 +2176,7 @@ function renderAnalyse() {
   $('analyse-liste').innerHTML = ANALYSE_DIAGRAMME.map((d) =>
     '<section><h2>' + escapeHtml(d.titel) + infoKnopfHTML(d.info) + '</h2>' +
     '<p class="dia-wert" id="dia-wert-' + d.id + '"></p>' +
-    d.zeichnen(reihe) +
+    '<div class="dia-wrap"><div class="dia-tip" hidden></div>' + d.zeichnen(reihe) + '</div>' +
     '<p class="note" style="margin:8px 0 12px">' + escapeHtml(d.hinweis) + '</p></section>'
   ).join('');
 
