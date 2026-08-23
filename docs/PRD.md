@@ -120,10 +120,22 @@ Bei eurer Kostenliste sind das rund acht V-Posten pro Monat.
 | **Fälligkeitssicht** | Kosten im Monat der tatsächlichen Zahlung | die Soll/Ist-Brücke |
 | **Durchschnittssicht** | Jahreskosten geteilt durch zwölf | Beitrag an die Töpfe, Jahresplanung |
 
-Zwingend, weil die Steuerrechnung im März rausgeht und nicht in zwölf Raten. Mit
-geglätteten Werten zeigte die Brücke elf Monate lang eine Sparleistung, die keine
-ist, und im März eine Lücke, die keine Verfehlung ist. Der geplante Sparbetrag
-ist also nicht in jedem Monat gleich hoch — und das ist richtig so.
+Beide Sichten werden gebraucht, weil die Steuerrechnung im März rausgeht und
+nicht in zwölf Raten.
+
+Welche Zahl als Sparbetrag stimmt, hängt davon ab, welche Konten gemeint sind:
+
+- **Nur die privaten Konten** — was am Monatsende auf dem eigenen Konto liegen
+  bleibt: Lohn minus eigene Kosten minus die feste Topfeinzahlung. Diese Zahl
+  ist jeden Monat gleich hoch, ausser im Monat des 13. Monatslohns.
+- **Alle Konten samt Topfkonten** — die Zahl der Fälligkeitssicht. Sie schwankt,
+  weil die Topfkonten sich füllen und im Zahlungsmonat wieder leeren.
+
+Die beiden unterscheiden sich in jedem Monat um genau die Veränderung der
+Topfsaldi; über ein Jahr sind sie identisch. Welche davon die Übersicht als
+Hauptzahl zeigt, ist eine Frage der Darstellung und hier nicht festgelegt. Für
+die Soll/Ist-Brücke in 6.3 wird die Fälligkeitssicht verwendet, weil dort gegen
+die Veränderung **aller** Kontosaldi gemessen wird.
 
 ### 4.4 Weitere Bestandteile
 
