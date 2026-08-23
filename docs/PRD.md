@@ -144,7 +144,9 @@ die Veränderung **aller** Kontosaldi gemessen wird.
 - **Gültigkeitsperioden** je Posten, damit eine Mietzinserhöhung im März die
   Januar-Auswertung nicht rückwirkend verfälscht
 - **Neue Kostenstellen** jederzeit anlegbar: Bezeichnung, Gruppe, Betrag,
-  Kostenart, Träger, Rhythmus. Auch neue Gruppen.
+  Kostenart, Träger, Rhythmus. Die **Gruppe** ist dabei eine feste Auswahl
+  und kein Freitext — sie ist eine Auswertungsdimension wie die Kostenart,
+  keine Nutzerangabe. Neue Gruppen sind darum nicht anlegbar.
 - **Akontozahlungen** (Heiz- und Nebenkosten) als D führen, die
   Schlussabrechnung im Zahlungsmonat als Sonderposten in beide Richtungen
 
