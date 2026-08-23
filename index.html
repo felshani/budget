@@ -160,6 +160,14 @@ button:active{opacity:.72}
 .diagramm .punkt{fill:var(--ok)}
 .diagramm text{fill:var(--ink-soft);font-family:var(--sans);font-size:9px}
 .diagramm text.wert{fill:var(--ink);font-family:var(--mono);font-size:9.5px}
+.diagramm .punkt.klein{opacity:.45}
+/* Das hidden-Attribut wirkt bei SVG-Gruppen nicht — hier ausdruecklich */
+.diagramm .marker[hidden]{display:none}
+.diagramm .marker line{stroke:var(--ok);stroke-width:1;opacity:.5}
+.diagramm .treffer{cursor:pointer}
+/* Wert des beruehrten Monats, direkt ueber dem Diagramm */
+.dia-wert{margin:0 0 6px;font-size:14px;color:var(--ink-soft);min-height:20px}
+.dia-wert b{color:var(--ink);font-weight:650}
 
 /* Abgesetzte Zusammenfassung (z.B. "Total"): bewusst OHNE Kartenrahmen,
    damit sie sich klar von den echten Karten darueber unterscheidet */
@@ -276,6 +284,15 @@ nav.tabbar button:active{opacity:.7}
 .wizard-betrag label{text-align:center;font-size:13px}
 .wizard-aktiv-zeile{display:flex;justify-content:flex-end;margin:0 0 12px}
 .wizard-aktiv-label{display:flex;align-items:center;gap:6px;font-size:12.5px;color:var(--ink-soft);font-weight:600;white-space:nowrap}
+
+/* Auswahl der Erfassungstiefe zu Beginn des Assistenten */
+.modus-liste{display:flex;flex-direction:column;gap:12px}
+.modus-wahl{display:block;width:100%;text-align:left;background:var(--paper);border:1px solid var(--rule);
+  color:var(--ink);border-radius:14px;padding:16px}
+.modus-wahl.an{border-color:var(--ok);box-shadow:inset 0 0 0 1px var(--ok)}
+.modus-wahl b{display:block;font-size:16px;font-weight:650;margin-bottom:4px}
+.modus-wahl.an b{color:var(--ok)}
+.modus-wahl span{display:block;font-size:13px;line-height:1.45;color:var(--ink-soft);font-weight:400}
 
 /* Kurze Bestaetigung nach dem Speichern, DESIGN.md: "keine Erfolgsseite" */
 .toast{
@@ -710,8 +727,37 @@ function istFaelligIn(posten, monat) {
   return posten.faelligMonate.includes(mm);
 }
 
+/* Ohne gewaehlten Faelligkeitsmonat ist der Zahlungszeitpunkt unbekannt.
+   Dann gilt der Betrag als gleichmaessig ueber das Jahr verteilt — sonst
+   wuerde der Posten aus der Faelligkeitssicht ganz verschwinden, waehrend
+   er im Budget weiterzaehlt. */
 function betragFaellig(posten, monat) {
+  if (posten.rhythmus !== 'monatlich' && (!posten.faelligMonate || posten.faelligMonate.length === 0)) {
+    return betragGeglaettet(posten);
+  }
   return istFaelligIn(posten, monat) ? (Number(posten.betrag) || 0) : 0;
+}
+
+/* Traegt eine Person die Kosten selbst, oder laufen sie ueber einen
+   gemeinsamen Topf? Alles, was nicht auf eine Person laeuft, gilt als
+   Topfseite — so bleibt die Rechnung immer vollstaendig. */
+function istPersonenTraeger(id) { return dok.personen.some((p) => p.id === id); }
+function eigenePosten(liste) { return liste.filter((p) => istPersonenTraeger(p.traeger)); }
+function topfPosten(liste) { return liste.filter((p) => !istPersonenTraeger(p.traeger)); }
+
+/* Die feste Einzahlung in alle Toepfe fuer einen Monat — gleichbleibend,
+   jaehrliche Rechnungen sind darin auf zwoelf Monate verteilt. */
+function einzahlungInToepfe(monat) {
+  return topfPosten(dok.budgetposten.filter((p) => istGueltig(p, monat)))
+    .reduce((a, p) => a + betragGeglaettet(p), 0);
+}
+
+/* Der Sparbetrag aus Sicht der privaten Konten fuer einen Monat. Dieselbe
+   Rechnung wie in der Uebersicht — die Analyse muss dasselbe zeigen. */
+function sparbetragImMonat(monat) {
+  return summeFaellig(dok.einnahmen, monat)
+    - summeFaellig(eigenePosten(dok.budgetposten), monat)
+    - einzahlungInToepfe(monat);
 }
 
 /* ---------- Zeitraum: Monat oder Kalenderjahr ----------
@@ -1000,6 +1046,10 @@ function sheetSchliessen() {
   clearTimeout(sheetAufraeumTimer);
   const aufraeumen = () => {
     clearTimeout(sheetAufraeumTimer);
+    /* Wurde zwischenzeitlich wieder geoeffnet, darf diese Aufraeumung aus
+       dem alten Schliessvorgang nichts mehr verstecken — der transitionend
+       kommt sonst am Ende der OEFFNEN-Bewegung an. */
+    if (sheetOffen) return;
     overlay.classList.remove('sichtbar'); sheet.style.transform = ''; aktualisiereScrollSperre();
   };
   if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
@@ -1103,8 +1153,13 @@ document.addEventListener('mouseup', ziehEnde);
    (beide Personennamen leer) und ist zusaetzlich jederzeit unter "Mehr"
    erneut aufrufbar. */
 
-const WIZARD_SCHRITTE = ['personen', 'einnahmen', 'kostenstellen'];
-const WIZARD_TITEL = { personen: 'Personen', einnahmen: 'Einnahmen', kostenstellen: 'Kostenstellen' };
+const WIZARD_SCHRITTE = ['modus', 'personen', 'einnahmen', 'kostenstellen'];
+const WIZARD_TITEL = { modus: 'Wie genau?', personen: 'Personen', einnahmen: 'Einnahmen', kostenstellen: 'Kostenstellen' };
+
+/* 'einfach' fragt keine Faelligkeitsmonate ab — ein Betrag ohne
+   gewaehlten Monat gilt als gleichmaessig ueber das Jahr verteilt
+   (siehe betragFaellig). 'detailliert' fragt sie wie bisher ab. */
+let wizardModus = 'einfach';
 
 let wizardOffen = false;
 let wizardSchritt = 0;
@@ -1248,7 +1303,7 @@ function wizardEinnahmeFormHTML(e) {
     (e.art === 'Nettolohn' ? wizard13tesHTML(e) : '') +
     auswahlHTML('Person', 'einnahme', e.id, 'personId', e.personId, dok.personen.map((p) => [p.id, personName(p.id)])) +
     auswahlHTML('Rhythmus', 'einnahme', e.id, 'rhythmus', e.rhythmus, RHYTHMEN) +
-    (e.rhythmus === 'monatlich' ? '' :
+    (e.rhythmus === 'monatlich' || wizardModus === 'einfach' ? '' :
       '<div class="feld"><label>Fälligkeitsmonate</label>' + monatsRasterHTML('einnahme', e.id, e.faelligMonate) +
       '<p class="note" style="margin-top:8px">Monat der tatsächlichen Zahlung.</p></div>') +
     '</div>';
@@ -1286,7 +1341,7 @@ function wizardPostenFormHTML(p, k) {
       [['D', 'D — Dauerauftrag'], ['R', 'R — Rückstellung'], ['V', 'V — Variabel']]) +
     auswahlHTML('Träger', 'budgetposten', p.id, 'traeger', p.traeger, null, traegerOptionsHTML(p.traeger)) +
     auswahlHTML('Rhythmus', 'budgetposten', p.id, 'rhythmus', p.rhythmus, RHYTHMEN) +
-    (p.rhythmus === 'monatlich' ? '' :
+    (p.rhythmus === 'monatlich' || wizardModus === 'einfach' ? '' :
       '<div class="feld"><label>Fälligkeitsmonate</label>' + monatsRasterHTML('budgetposten', p.id, p.faelligMonate) +
       '<p class="note" style="margin-top:8px">Monat der tatsächlichen Zahlung.</p></div>') +
     '</div>';
@@ -1318,6 +1373,18 @@ function wizardEinnahmenVorlageEinfuegen() {
 }
 
 function wizardInhaltHTML(schritt) {
+  if (schritt === 'modus') {
+    const wahl = (wert, titel, text) =>
+      '<button type="button" class="modus-wahl' + (wizardModus === wert ? ' an' : '') +
+      '" data-action="wizard-modus" data-modus="' + wert + '">' +
+      '<b>' + titel + '</b><span>' + text + '</span></button>';
+    return '<div class="modus-liste">' +
+      wahl('einfach', 'Einfach',
+        'Nur Bezeichnung und Betrag. Jährliche Rechnungen werden gleichmässig über zwölf Monate verteilt.') +
+      wahl('detailliert', 'Detailliert',
+        'Zusätzlich der Monat, in dem eine Rechnung tatsächlich bezahlt wird. Genauer, aber mehr Eingaben.') +
+      '</div><p class="note" style="margin-top:14px">Lässt sich später jederzeit im Budget nachtragen.</p>';
+  }
   if (schritt === 'personen') {
     return '<div class="editform">' + personenFelderHTML() +
       '<p class="note">Die Namen lassen sich jederzeit unter „Mehr" ändern.</p></div>';
@@ -1398,6 +1465,7 @@ function wizardSchliessen(abgeschlossen) {
   clearTimeout(wizardAufraeumTimer);
   const aufraeumen = () => {
     clearTimeout(wizardAufraeumTimer);
+    if (wizardOffen) return; /* zwischenzeitlich wieder geoeffnet, siehe sheetSchliessen */
     overlay.classList.remove('sichtbar');
     aktualisiereScrollSperre();
   };
@@ -1825,7 +1893,7 @@ function analyseJahresreihe() {
     kuerzel: MONATSKUERZEL[Number(m.split('-')[1]) - 1],
     einnahmen: summeFaellig(dok.einnahmen, m),
     kosten: summeFaellig(dok.budgetposten, m),
-    wert: summeFaellig(dok.einnahmen, m) - summeFaellig(dok.budgetposten, m)
+    wert: sparbetragImMonat(m)
   }));
 }
 
@@ -1838,24 +1906,41 @@ function diaSkala(werte) {
   return { max, min, y: (w) => DIA.oben + (max - w) / spanne * innen, null: DIA.oben + max / spanne * innen };
 }
 
+/* Beruehren oder Ueberfahren zeigt den Wert des jeweiligen Monats. Die
+   Reihen liegen dafuer nach dem Zeichnen bereit. */
+let analyseReihe = [];
+let analyseKumuliert = [];
+
+const diaFeld = () => (DIA.breite - DIA.links - DIA.rechts) / 12;
+const diaX = (i) => DIA.links + i * diaFeld() + diaFeld() / 2;
+
+/* Unsichtbare Trefferflaechen je Monat, damit auch schmale Balken und
+   einzelne Punkte gut zu treffen sind. */
+function diaTrefferflaechen() {
+  let html = '';
+  for (let i = 0; i < 12; i++) {
+    html += '<rect class="treffer" data-i="' + i + '" x="' + (DIA.links + i * diaFeld()).toFixed(1) +
+      '" y="0" width="' + diaFeld().toFixed(1) + '" height="' + DIA.hoehe + '" fill="transparent"/>';
+  }
+  return html;
+}
+
 /* Diagramm 1: was in jedem einzelnen Monat uebrig bleibt. */
 function diagrammSparbetragProMonat(reihe) {
-  const werte = reihe.map((r) => r.wert);
-  const s = diaSkala(werte);
-  const feld = (DIA.breite - DIA.links - DIA.rechts) / 12;
+  const s = diaSkala(reihe.map((r) => r.wert));
+  const feld = diaFeld();
   const breite = feld * 0.62;
-  let html = '<svg class="diagramm" viewBox="0 0 ' + DIA.breite + ' ' + DIA.hoehe + '" role="img" aria-label="Sparbetrag je Monat">';
+  let html = '<svg class="diagramm" data-dia="sparbetrag-monat" viewBox="0 0 ' + DIA.breite + ' ' + DIA.hoehe +
+    '" role="img" aria-label="Sparbetrag je Monat">';
   html += '<line class="achse" x1="' + DIA.links + '" y1="' + s.null.toFixed(1) + '" x2="' + (DIA.breite - DIA.rechts) + '" y2="' + s.null.toFixed(1) + '"/>';
   reihe.forEach((r, i) => {
     const x = DIA.links + i * feld + (feld - breite) / 2;
     const y = Math.min(s.y(r.wert), s.null), h = Math.max(Math.abs(s.y(r.wert) - s.null), 1);
-    const jetzt = r.monat === uebersichtMonat ? ' jetzt' : '';
-    html += '<rect class="balken' + jetzt + '" x="' + x.toFixed(1) + '" y="' + y.toFixed(1) +
+    html += '<rect class="balken" data-i="' + i + '" x="' + x.toFixed(1) + '" y="' + y.toFixed(1) +
       '" width="' + breite.toFixed(1) + '" height="' + h.toFixed(1) + '" rx="1.5"/>';
-    html += '<text x="' + (DIA.links + i * feld + feld / 2).toFixed(1) + '" y="' + (DIA.hoehe - 5) +
-      '" text-anchor="middle">' + r.kuerzel + '</text>';
+    html += '<text x="' + diaX(i).toFixed(1) + '" y="' + (DIA.hoehe - 5) + '" text-anchor="middle">' + r.kuerzel + '</text>';
   });
-  return html + '</svg>';
+  return html + diaTrefferflaechen() + '</svg>';
 }
 
 /* Diagramm 2: wie das Ersparte ueber das Jahr waechst. */
@@ -1863,32 +1948,89 @@ function diagrammErspartesKumuliert(reihe) {
   let lauf = 0;
   const punkte = reihe.map((r) => { lauf += r.wert; return lauf; });
   const s = diaSkala(punkte);
-  const feld = (DIA.breite - DIA.links - DIA.rechts) / 12;
-  const x = (i) => DIA.links + i * feld + feld / 2;
-  const linie = punkte.map((w, i) => x(i).toFixed(1) + ' ' + s.y(w).toFixed(1)).join(' L ');
-  let html = '<svg class="diagramm" viewBox="0 0 ' + DIA.breite + ' ' + DIA.hoehe + '" role="img" aria-label="Erspartes im Jahresverlauf">';
+  const linie = punkte.map((w, i) => diaX(i).toFixed(1) + ' ' + s.y(w).toFixed(1)).join(' L ');
+  let html = '<svg class="diagramm" data-dia="erspartes-kumuliert" viewBox="0 0 ' + DIA.breite + ' ' + DIA.hoehe +
+    '" role="img" aria-label="Erspartes im Jahresverlauf">';
   html += '<line class="achse" x1="' + DIA.links + '" y1="' + s.null.toFixed(1) + '" x2="' + (DIA.breite - DIA.rechts) + '" y2="' + s.null.toFixed(1) + '"/>';
-  html += '<path class="flaeche" d="M ' + x(0).toFixed(1) + ' ' + s.null.toFixed(1) + ' L ' + linie +
-    ' L ' + x(11).toFixed(1) + ' ' + s.null.toFixed(1) + ' Z"/>';
+  html += '<path class="flaeche" d="M ' + diaX(0).toFixed(1) + ' ' + s.null.toFixed(1) + ' L ' + linie +
+    ' L ' + diaX(11).toFixed(1) + ' ' + s.null.toFixed(1) + ' Z"/>';
   html += '<path class="linie" d="M ' + linie + '"/>';
-  html += '<circle class="punkt" cx="' + x(11).toFixed(1) + '" cy="' + s.y(punkte[11]).toFixed(1) + '" r="2.5"/>';
-  html += '<text class="wert" x="' + (DIA.breite - DIA.rechts) + '" y="' + Math.max(9, s.y(punkte[11]) - 6).toFixed(1) +
-    '" text-anchor="end">' + escapeHtml(formatCHF(punkte[11])) + '</text>';
+  punkte.forEach((w, i) => {
+    html += '<circle class="punkt klein" data-i="' + i + '" cx="' + diaX(i).toFixed(1) + '" cy="' + s.y(w).toFixed(1) + '" r="1.8"/>';
+  });
+  html += '<g class="marker" hidden><line class="achse" y1="' + DIA.oben + '" y2="' + (DIA.hoehe - DIA.unten) +
+    '"/><circle class="punkt" r="3.5"/></g>';
   reihe.forEach((r, i) => {
     if (i % 2) return;
-    html += '<text x="' + x(i).toFixed(1) + '" y="' + (DIA.hoehe - 5) + '" text-anchor="middle">' + r.kuerzel + '</text>';
+    html += '<text x="' + diaX(i).toFixed(1) + '" y="' + (DIA.hoehe - 5) + '" text-anchor="middle">' + r.kuerzel + '</text>';
   });
-  return html + '</svg>';
+  /* y-Position je Punkt merken, damit der Marker ohne Neuberechnung sitzt */
+  html += '<g class="ypos" hidden data-y="' + punkte.map((w) => s.y(w).toFixed(1)).join(',') + '"></g>';
+  return html + diaTrefferflaechen() + '</svg>';
 }
+
+/* Zeigt Monat und Betrag ueber dem Diagramm an und hebt die Stelle hervor. */
+function analyseWertZeigen(svg, i) {
+  const id = svg.dataset.dia;
+  const wert = id === 'sparbetrag-monat' ? (analyseReihe[i] || {}).wert : analyseKumuliert[i];
+  const el = $('dia-wert-' + id);
+  if (el) el.innerHTML = '<b>' + MONATSNAMEN[i] + '</b> · ' + escapeHtml(formatCHF(wert || 0));
+  svg.querySelectorAll('.balken').forEach((b) => b.classList.toggle('jetzt', Number(b.dataset.i) === i));
+  const marker = svg.querySelector('.marker');
+  if (marker) {
+    const ys = (svg.querySelector('.ypos') || {}).dataset;
+    if (ys) {
+      const y = Number(ys.y.split(',')[i]);
+      marker.querySelector('line').setAttribute('x1', diaX(i).toFixed(1));
+      marker.querySelector('line').setAttribute('x2', diaX(i).toFixed(1));
+      marker.querySelector('circle').setAttribute('cx', diaX(i).toFixed(1));
+      marker.querySelector('circle').setAttribute('cy', y);
+      marker.removeAttribute('hidden');
+    }
+  }
+}
+
+/* Ohne Beruehrung: aktueller Monat bzw. Jahresende. */
+function analyseWertZuruecksetzen(svg) {
+  const id = svg.dataset.dia;
+  const el = $('dia-wert-' + id);
+  const jetztIndex = analyseReihe.findIndex((r) => r.monat === uebersichtMonat);
+  if (id === 'sparbetrag-monat') {
+    const i = jetztIndex > -1 ? jetztIndex : 0;
+    if (el) el.innerHTML = '<b>' + MONATSNAMEN[i] + '</b> · ' + escapeHtml(formatCHF((analyseReihe[i] || {}).wert || 0));
+    svg.querySelectorAll('.balken').forEach((b) => b.classList.toggle('jetzt', Number(b.dataset.i) === i));
+  } else {
+    if (el) el.innerHTML = '<b>Ende Jahr</b> · ' + escapeHtml(formatCHF(analyseKumuliert[11] || 0));
+    const marker = svg.querySelector('.marker');
+    if (marker) marker.setAttribute('hidden', '');
+  }
+}
+
+function analyseZeiger(e) {
+  const svg = e.target.closest('svg.diagramm');
+  if (!svg) return;
+  const box = svg.getBoundingClientRect();
+  if (!box.width) return;
+  const x = (e.clientX - box.left) / box.width * DIA.breite;
+  const i = Math.max(0, Math.min(11, Math.floor((x - DIA.links) / diaFeld())));
+  analyseWertZeigen(svg, i);
+}
+
+document.addEventListener('pointermove', analyseZeiger);
+document.addEventListener('pointerdown', analyseZeiger);
+document.addEventListener('pointerleave', (e) => {
+  const svg = e.target.closest && e.target.closest('svg.diagramm');
+  if (svg) analyseWertZuruecksetzen(svg);
+}, true);
 
 const ANALYSE_DIAGRAMME = [
   {
     id: 'sparbetrag-monat',
     titel: 'Sparbetrag je Monat',
-    hinweis: 'Was in jedem einzelnen Monat übrig bleibt. Monate mit grossen Rechnungen fallen tiefer aus — der aktuell gewählte Monat ist hervorgehoben.',
+    hinweis: 'Was in jedem Monat auf dem eigenen Konto liegen bleibt. Gleich hoch, solange keine eigene Jahresrechnung anfällt — der 13. Monatslohn hebt seinen Monat heraus.',
     info: [
-      ['Grundlage', 'Einnahmen und Kosten im Monat ihrer tatsächlichen Zahlung'],
-      ['Unter der Linie', 'in diesem Monat übersteigen die Rechnungen die Einnahmen — kein Fehler, sondern eine grosse Zahlung'],
+      ['Grundlage', 'Einnahmen minus eigene Kosten minus die feste Einzahlung in die Töpfe — dieselbe Zahl wie auf der Übersicht'],
+      ['Warum meist gleich', 'die Topfeinzahlung ist jeden Monat gleich hoch; was die Töpfe später bezahlen, berührt das eigene Konto nicht'],
       ['Zeitraum', 'das oben gewählte Kalenderjahr']
     ],
     zeichnen: diagrammSparbetragProMonat
@@ -1896,7 +2038,7 @@ const ANALYSE_DIAGRAMME = [
   {
     id: 'erspartes-kumuliert',
     titel: 'Erspartes im Jahresverlauf',
-    hinweis: 'Wie sich das Ersparte über das Jahr aufbaut, Monat für Monat aufsummiert.',
+    hinweis: 'Wie sich das Ersparte über das Jahr aufbaut, Monat für Monat aufsummiert. Antippen zeigt den Stand des jeweiligen Monats.',
     info: [
       ['Grundlage', 'die Monatswerte des ersten Diagramms, fortlaufend addiert'],
       ['Endwert', 'entspricht dem Sparbetrag der Jahressicht auf der Übersicht'],
@@ -1910,15 +2052,23 @@ function renderAnalyse() {
   const reihe = analyseJahresreihe();
   const leer = reihe.every((r) => r.einnahmen === 0 && r.kosten === 0);
   if (leer) {
+    analyseReihe = []; analyseKumuliert = [];
     $('analyse-liste').innerHTML = '<section><p class="leer">Noch keine Einnahmen und Kosten erfasst. ' +
       'Sobald im Budget etwas steht, erscheinen hier die Auswertungen.</p></section>';
     return;
   }
+  analyseReihe = reihe;
+  let lauf = 0;
+  analyseKumuliert = reihe.map((r) => { lauf += r.wert; return lauf; });
+
   $('analyse-liste').innerHTML = ANALYSE_DIAGRAMME.map((d) =>
     '<section><h2>' + escapeHtml(d.titel) + infoKnopfHTML(d.info) + '</h2>' +
+    '<p class="dia-wert" id="dia-wert-' + d.id + '"></p>' +
     d.zeichnen(reihe) +
     '<p class="note" style="margin:8px 0 12px">' + escapeHtml(d.hinweis) + '</p></section>'
   ).join('');
+
+  document.querySelectorAll('#analyse-liste svg.diagramm').forEach(analyseWertZuruecksetzen);
 }
 
 /* ---------- Mehr ---------- */
@@ -1998,50 +2148,53 @@ function renderMehr() {
 function renderUebersicht() {
   const monat = uebersichtMonat;
   const jahr = uebersichtSicht === 'jahr';
+  const postenGueltig = dok.budgetposten.filter((p) => istGueltig(p, monat));
 
+  /* Sparbetrag aus Sicht der privaten Konten: Lohn minus eigene Kosten
+     minus die feste Topfeinzahlung. Was die Toepfe spaeter bezahlen,
+     beruehrt das private Konto nicht und steht darum hier nicht. */
   const einnahmen = summeZeitraum(dok.einnahmen);
-  const kosten = summeZeitraum(dok.budgetposten);
+  const eigene = summeZeitraum(eigenePosten(dok.budgetposten));
+  const einzahlung = einzahlungInToepfe(monat) * (jahr ? 12 : 1);
+  const sparbetrag = einnahmen - eigene - einzahlung;
 
-  $('hero-zahl').textContent = formatCHF(einnahmen - kosten);
+  $('hero-zahl').textContent = formatCHF(sparbetrag);
   $('hero-sub').textContent = jahr ? 'im Jahr ' + jahrVon(monat) : 'im ' + monatLabel(monat);
 
   $('uebersicht-brutto-titel').innerHTML = (jahr ? 'Im Jahr ' + jahrVon(monat) : 'In diesem Monat') +
-    infoKnopfHTML(jahr
-      ? [['Einnahmen', 'alles, was im Lauf des Jahres eingeht — inklusive 13. Monatslohn und Bonus'],
-         ['Kosten', 'alle Rechnungen des Jahres, unabhängig davon, wann sie fällig sind'],
-         ['Bleibt zum Sparen', 'Einnahmen minus Kosten für das ganze Jahr']]
-      : [['Einnahmen', 'was in diesem Monat tatsächlich eingeht'],
-         ['Kosten', 'die Rechnungen, die in diesem Monat tatsächlich bezahlt werden'],
-         ['Bleibt zum Sparen', 'Einnahmen minus Kosten — in Monaten mit grossen Rechnungen fällt das kleiner aus']]);
+    infoKnopfHTML([
+      ['Einnahmen', 'Lohn und weitere Einnahmen, ' + (jahr ? 'über das ganze Jahr' : 'die in diesem Monat eingehen')],
+      ['Eigene Kosten', 'Rechnungen, die direkt vom eigenen Konto gehen — im Monat ihrer Zahlung'],
+      ['Einzahlung in die Töpfe', 'der feste Betrag für Haushalt und Ferien. Immer gleich hoch, jährliche Rechnungen sind darin auf zwölf Monate verteilt'],
+      ['Bleibt zum Sparen', 'was am Ende auf dem eigenen Konto liegen bleibt. Was die Töpfe später bezahlen, ändert daran nichts']
+    ]);
 
   $('uebersicht-brutto').innerHTML =
     zeileHTML('Einnahmen', einnahmen) +
-    zeileHTML('Kosten', kosten) +
-    zeileHTML('Bleibt zum Sparen', einnahmen - kosten, true);
+    zeileHTML('Eigene Kosten', eigene) +
+    zeileHTML('Einzahlung in die Töpfe', einzahlung) +
+    zeileHTML('Bleibt zum Sparen', sparbetrag, true);
 
   $('uebersicht-brutto-note').textContent = jahr
     ? 'Alle zwölf Monate des Jahres zusammengezählt.'
-    : 'Nur was in diesem Monat fällig ist. Jährliche Rechnungen erscheinen im Monat ihrer Zahlung.';
+    : 'Die Einzahlung in die Töpfe ist jeden Monat gleich hoch. Der Betrag ändert sich nur, wenn eigene Rechnungen anfallen oder der 13. Monatslohn kommt.';
 
-  /* Beiträge und Personenbilanz laufen ueber den gleichbleibenden Betrag
-     (PRD 5.2), damit die Einzahlung jeden Monat gleich hoch ist. */
   const anteile = einkommensAnteile(monat);
   const summeProPerson = {}; dok.personen.forEach((p) => { summeProPerson[p.id] = 0; });
-  const aktiveTöpfe = dok.toepfe.filter((t) => t.aktiv);
-  const postenGueltig = dok.budgetposten.filter((p) => istGueltig(p, monat));
+  const aktiveToepfe = dok.toepfe.filter((t) => t.aktiv);
 
   $('uebersicht-toepfe-titel').innerHTML = 'Beitrag an die Töpfe, ' + proZeitraum() +
     infoKnopfHTML([
       ['Was das ist', 'der Betrag, den jede Person ' + proZeitraum() + ' in den gemeinsamen Topf einzahlt'],
       ['Immer gleich hoch', 'jährliche Rechnungen wie Steuern und Prämien sind auf zwölf Monate verteilt'],
-      ['Aufteilung', 'richtet sich nach dem Verteilschlüssel des Topfes — änderbar unter "Mehr"']
+      ['Aufteilung', 'richtet sich nach dem Verteilschlüssel des Topfes — änderbar unter „Mehr"']
     ]);
 
-  if (aktiveTöpfe.length === 0) {
+  if (aktiveToepfe.length === 0) {
     $('uebersicht-toepfe').innerHTML = '<p class="leer">Noch keine Töpfe.</p>';
   } else {
     let html = ''; let summeKosten = 0;
-    aktiveTöpfe.forEach((t) => {
+    aktiveToepfe.forEach((t) => {
       const kostenTopf = summeDurchschnitt(postenGueltig.filter((p) => p.traeger === t.id));
       summeKosten += kostenTopf;
       const anteilePersonen = anteilProTopf(t, anteile);
@@ -2062,20 +2215,22 @@ function renderUebersicht() {
 
   $('uebersicht-personen-titel').innerHTML = 'Je Person, ' + proZeitraum() +
     infoKnopfHTML([
-      ['Einnahmen', 'Lohn und weitere Einnahmen dieser Person, ' + proZeitraum()],
-      ['Eigene Kosten', 'Kosten, die auf diese Person laufen — nicht auf einen gemeinsamen Topf'],
-      ['Bleibt übrig', 'was nach eigenen Kosten und Topfbeiträgen zum Sparen bleibt']
+      ['Einnahmen', 'Lohn und weitere Einnahmen dieser Person'],
+      ['Eigene Kosten', 'Rechnungen, die auf diese Person laufen — nicht auf einen gemeinsamen Topf'],
+      ['Bleibt übrig', 'was dieser Person zum Sparen bleibt. Die beiden Beträge zusammen ergeben den Sparbetrag oben']
     ]);
 
+  /* Dieselbe Rechnung wie oben, nur je Person aufgeteilt — die Summe der
+     beiden Personen ergibt darum genau den Sparbetrag in der Kennzahl. */
   let personenHTML = '';
   dok.personen.forEach((p) => {
-    const eigeneEinnahmen = summeDurchschnitt(dok.einnahmen.filter((e) => e.personId === p.id && istGueltig(e, monat)));
-    const eigeneKosten = summeDurchschnitt(postenGueltig.filter((x) => x.traeger === p.id));
+    const eigeneEinnahmen = summeZeitraum(dok.einnahmen.filter((e) => e.personId === p.id));
+    const eigeneKosten = summeZeitraum(eigenePosten(dok.budgetposten).filter((x) => x.traeger === p.id));
     const beitraege = summeProPerson[p.id] || 0;
     personenHTML += '<section><h2>' + escapeHtml(personName(p.id)) + '</h2>' +
       zeileHTML('Einnahmen', eigeneEinnahmen) +
       zeileHTML('Eigene Kosten', eigeneKosten) +
-      zeileHTML('Beiträge an Töpfe', beitraege) +
+      zeileHTML('Einzahlung in die Töpfe', beitraege) +
       zeileHTML('Bleibt übrig', eigeneEinnahmen - eigeneKosten - beitraege, true) +
       '</section>';
   });
@@ -2261,6 +2416,7 @@ function behandeln(action, el) {
     }
     case 'wizard-einnahme-13tes': wizardEinnahme13tesUmschalten(d.id, el.checked); break;
     case 'wizard-gruppe-liste': wizardGruppeListe(d.id); break;
+    case 'wizard-modus': wizardModus = d.modus; renderWizardSchritt(); break;
     case 'alles-zuruecksetzen': allesZuruecksetzen(); break;
   }
 }

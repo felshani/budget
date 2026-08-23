@@ -11,7 +11,9 @@ anlegen, dazu eine Übersicht mit Sparbetrag und Beitrag je Person und Topf
 sowie erste Auswertungen.
 
 Beim ersten Start führt ein Assistent durch Personen, Einnahmen und
-Kostenstellen. Vier Tabs: **Übersicht** (Einnahmen, Kosten und Sparbetrag,
+Kostenstellen — wahlweise **einfach** (nur Bezeichnung und Betrag,
+jährliche Rechnungen werden auf zwölf Monate verteilt) oder **detailliert**
+(zusätzlich der Monat der tatsächlichen Zahlung). Vier Tabs: **Übersicht** (Einnahmen, Kosten und Sparbetrag,
 umschaltbar zwischen Monat und Jahr), **Budget** (Kostenstellen nach Gruppe
 oder nach Träger, mit Summen), **Analyse** (Diagramme zum Sparverlauf) und
 **Mehr** (Personen, Töpfe, Startmonat, Sicherung, Prüfblatt).
