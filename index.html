@@ -174,6 +174,16 @@ button:active{opacity:.72}
 }
 .dia-tip[hidden]{display:none}
 .dia-tip b{font-family:var(--sans);font-weight:650;margin-right:5px}
+/* Kreisdiagramm: eine Akzentfarbe, abgestuft (DESIGN.md) */
+.diagramm .stueck{fill:var(--ok);stroke:var(--card);stroke-width:1.2}
+.diagramm .stueck.an{stroke:var(--ink);stroke-width:2}
+.legende{margin-top:4px}
+.legende-zeile{cursor:pointer}
+.legende-zeile.an .name b{color:var(--ok)}
+.legende-zeile .name{display:flex;align-items:baseline;gap:7px}
+.legende-zeile .name b{font-weight:550;font-size:14px}
+.punkt-farbe{width:10px;height:10px;border-radius:3px;background:var(--ok);flex:0 0 auto;align-self:center}
+.anteil{font-size:12px;color:var(--ink-soft);font-family:var(--mono);white-space:nowrap;flex:0 0 auto}
 .dia-tip span{font-family:var(--mono);font-variant-numeric:tabular-nums}
 .diagramm .achse{stroke:var(--rule);stroke-width:1}
 .diagramm .balken{fill:var(--ok);opacity:.45}
@@ -491,7 +501,6 @@ nav.tabbar button:active{opacity:.7}
 
   </main>
 
-  <datalist id="gruppen-vorschlaege"></datalist>
   <datalist id="einnahmenarten">
     <option value="Nettolohn"><option value="13. Monatslohn"><option value="Bonus">
     <option value="Familienzulagen"><option value="Nebenerwerb">
@@ -1194,7 +1203,7 @@ let wizardEinnahmenVorlageEingefuegt = false;
    strukturell (kein Anbieter-/Produktname, kein Personenname, kein
    Betrag — Personenbezug laeuft ausschliesslich ueber das bestehende
    traeger-Feld). [Bezeichnung, Gruppe, Kostenart, TraegerTyp]; Gruppen
-   decken sich bewusst mit GRUPPEN_VORSCHLAEGE. TraegerTyp:
+   decken sich bewusst mit GRUPPEN. TraegerTyp:
    'haushalt' | 'ferien' | 'p1' | 'p2', siehe wizardTraegerId(). */
 const WIZARD_KOSTENSTELLEN_VORLAGE = [
   ['Miete (inkl. Nebenkosten)', 'Wohnkosten', 'D', 'haushalt'],
@@ -1330,34 +1339,13 @@ function wizardEinnahmeFormHTML(e) {
     '</div>';
 }
 
-/* Kategorien, deren Gruppe gerade als Freitext erfasst wird ("Neue
-   Gruppe …" gewaehlt) — eine feste Auswahlliste allein wuerde neue
-   Gruppen verunmoeglichen (CLAUDE.md: alles Nutzerdefinierte ist Daten). */
-const wizardGruppeFreitext = new Set();
-
-function wizardGruppeHTML(k) {
-  if (wizardGruppeFreitext.has(k.id)) {
-    return '<div class="feld"><label>Gruppe</label>' +
-      '<input type="text" data-entity="kategorie" data-id="' + k.id + '" data-feld="gruppe" value="' +
-      escapeHtml(k.gruppe || '') + '" autocomplete="off">' +
-      '<div class="btns" style="margin:8px 0 0"><button type="button" class="ghost klein" data-action="wizard-gruppe-liste" data-id="' +
-      k.id + '">Aus Liste wählen</button></div></div>';
-  }
-  const bekannt = Array.from(new Set([...GRUPPEN_VORSCHLAEGE, ...dok.kategorien.map((x) => x.gruppe).filter(Boolean)]))
-    .sort((a, b) => a.localeCompare(b, 'de-CH'));
-  const opts = (k.gruppe ? '' : '<option value="" selected>— bitte wählen —</option>') +
-    bekannt.map((g) => '<option value="' + escapeHtml(g) + '"' + (g === k.gruppe ? ' selected' : '') + '>' + escapeHtml(g) + '</option>').join('') +
-    '<option value="__neu">Neue Gruppe …</option>';
-  return '<div class="feld"><label>Gruppe</label><select data-action="wizard-gruppe-wahl" data-id="' + k.id + '">' + opts + '</select></div>';
-}
-
 function wizardPostenFormHTML(p, k) {
   return '<div class="wizard-aktiv-zeile"><label class="wizard-aktiv-label">' +
     '<input type="checkbox" data-action="wizard-posten-umschalten-aktiv" data-id="' + p.id + '"' + (p.aktiv ? ' checked' : '') + '> aktiv</label></div>' +
     '<div class="editform">' +
     feldHTML('Bezeichnung', 'text', 'kategorie', k.id, 'name', k.name) +
     '<div class="wizard-betrag">' + feldHTML('Betrag (CHF)', 'number', 'budgetposten', p.id, 'betrag', p.betrag, { step: '0.05' }) + '</div>' +
-    wizardGruppeHTML(k) +
+    gruppeFeldHTML(k) +
     auswahlHTML('Kostenart', 'budgetposten', p.id, 'kostenart', p.kostenart,
       [['D', 'D — Dauerauftrag'], ['R', 'R — Rückstellung'], ['V', 'V — Variabel']]) +
     auswahlHTML('Träger', 'budgetposten', p.id, 'traeger', p.traeger, null, traegerOptionsHTML(p.traeger)) +
@@ -1465,7 +1453,6 @@ function wizardOeffnen() {
   wizardUnterindex = 0;
   wizardVorlageEingefuegt = false;
   wizardEinnahmenVorlageEingefuegt = false;
-  wizardGruppeFreitext.clear();
   wizardLetzteSeite = null;
   renderWizardSchritt();
   aktualisiereScrollSperre();
@@ -1621,26 +1608,14 @@ function wizard13tesMonatGewaehlt(el) {
   sichern(); renderNurTab();
 }
 
-/* Gruppen-Auswahl im Assistenten: "__neu" darf nie ins Datenmodell,
-   sondern schaltet diese Kategorie auf Freitext um. */
-function wizardGruppeGewaehlt(el) {
+/* Gruppenwahl, im Assistenten wie im Sheet. */
+function gruppeGewaehlt(el) {
   const k = findeObjekt('kategorie', el.dataset.id);
   if (!k) return;
-  if (el.value === '__neu') {
-    wizardGruppeFreitext.add(k.id);
-    k.gruppe = '';
-    sichern(); renderWizardSchritt();
-    wizardFokussiere('kategorie', k.id, 'gruppe');
-    return;
-  }
   k.gruppe = el.value;
-  sichern(); renderNurTab(); /* Select zeigt die Wahl selbst, kein Neuaufbau */
+  sichern(); renderNurTab();
 }
 
-function wizardGruppeListe(id) {
-  wizardGruppeFreitext.delete(id);
-  renderWizardSchritt();
-}
 
 /* ---------- Bausteine fuer HTML ---------- */
 
@@ -1819,19 +1794,22 @@ function zeileHTML(label, betrag, betont) {
     klasse + '">' + formatCHF(betrag) + '</div></div>';
 }
 
-/* Feste Reihenfolge im Budget-Tab; unbekannte Gruppen folgen danach
-   alphabetisch. Die Einnahmen stehen als eigener Abschnitt darueber. */
-const GRUPPEN_REIHENFOLGE = ['Wohnkosten', 'Auto', 'Energie und Kommunikation', 'Haushalt',
+/* Feste Kostengruppen — auswaehlbar, nicht frei eintippbar. Die Reihenfolge
+   gilt zugleich fuer die Darstellung im Budget-Tab. Ein bereits erfasster
+   Wert, der nicht in der Liste steht (aeltere Datei), bleibt erhalten und
+   wird zusaetzlich angeboten, damit nichts stillschweigend umgehaengt wird. */
+const GRUPPEN = ['Wohnkosten', 'Auto', 'Energie und Kommunikation', 'Haushalt',
   'Öffentlicher Verkehr', 'Rückstellungen', 'Steuern', 'Versicherungen und Vorsorge',
   'Persönliche Ausgaben'];
 
-const GRUPPEN_VORSCHLAEGE = ['Wohnkosten','Energie und Kommunikation','Steuern','Versicherungen und Vorsorge',
-  'Öffentlicher Verkehr','Auto','Verschiedenes','Haushalt','Persönliche Ausgaben','Rückstellungen'];
-
-function aktualisiereGruppenListe() {
-  const vorhandene = dok.kategorien.filter((k) => k.aktiv).map((k) => k.gruppe).filter(Boolean);
-  const alle = Array.from(new Set([...GRUPPEN_VORSCHLAEGE, ...vorhandene])).sort((a, b) => a.localeCompare(b, 'de-CH'));
-  $('gruppen-vorschlaege').innerHTML = alle.map((g) => '<option value="' + escapeHtml(g) + '">').join('');
+/* Ein Auswahlfeld, verwendet im Assistenten wie im Erfassen-Sheet. */
+function gruppeFeldHTML(k) {
+  const bekannt = GRUPPEN.includes(k.gruppe) ? GRUPPEN : GRUPPEN.concat(k.gruppe ? [k.gruppe] : []);
+  const opts = '<option value=""' + (k.gruppe ? '' : ' selected') + '>— bitte wählen —</option>' +
+    bekannt.map((g) => '<option value="' + escapeHtml(g) + '"' +
+      (g === k.gruppe ? ' selected' : '') + '>' + escapeHtml(g) + '</option>').join('');
+  return '<div class="feld"><label>Gruppe</label>' +
+    '<select data-action="gruppe-wahl" data-id="' + k.id + '">' + opts + '</select></div>';
 }
 
 /* ---------- Budget ---------- */
@@ -1872,7 +1850,7 @@ function postenZeileHTML(p) {
 function postenFormHTML(p, k) {
   return '<div class="editform">' +
     feldHTML('Bezeichnung', 'text', 'kategorie', k.id, 'name', k.name) +
-    feldHTML('Gruppe', 'text', 'kategorie', k.id, 'gruppe', k.gruppe, { list: 'gruppen-vorschlaege' }) +
+    gruppeFeldHTML(k) +
     '<div class="feldzeile">' +
       feldHTML('Betrag (CHF)', 'number', 'budgetposten', p.id, 'betrag', p.betrag, { step: '0.05' }) +
       auswahlHTML('Kostenart', 'budgetposten', p.id, 'kostenart', p.kostenart,
@@ -1911,8 +1889,8 @@ function budgetNachGruppeHTML(posten) {
     (gruppen[g] = gruppen[g] || []).push(p);
   });
   const rang = (g) => {
-    const i = GRUPPEN_REIHENFOLGE.indexOf(g);
-    return i > -1 ? i : GRUPPEN_REIHENFOLGE.length;
+    const i = GRUPPEN.indexOf(g);
+    return i > -1 ? i : GRUPPEN.length;
   };
   return Object.keys(gruppen)
     .sort((a, b) => (rang(a) - rang(b)) || a.localeCompare(b, 'de-CH'))
@@ -1947,7 +1925,6 @@ function budgetNachTraegerHTML(posten) {
 }
 
 function renderBudget() {
-  aktualisiereGruppenListe();
   const zeigeInaktiv = inaktiveSichtbar.budget;
   $('umschalt-budget').textContent = 'Inaktive: ' + (zeigeInaktiv ? 'ein' : 'aus');
   $('budget-gruppierung').value = budgetGruppierung;
@@ -1998,6 +1975,7 @@ function diaSkala(werte) {
    Reihen liegen dafuer nach dem Zeichnen bereit. */
 let analyseReihe = [];
 let analyseKumuliert = [];
+let analyseAnteile = { stuecke: [], summe: 0, winkel: [] };
 
 const diaFeld = () => (DIA.breite - DIA.links - DIA.rechts) / 12;
 const diaX = (i) => DIA.links + i * diaFeld() + diaFeld() / 2;
@@ -2091,13 +2069,47 @@ function analyseWertZeigen(svg, i) {
   }
 }
 
+/* Hebt ein Kuchenstueck hervor und zeigt Betrag und Anteil daneben. */
+function analyseAnteilZeigen(svg, i, quelle) {
+  if (!svg || !analyseAnteile.stuecke || !analyseAnteile.stuecke[i]) return;
+  const st = analyseAnteile.stuecke[i];
+  const anteil = analyseAnteile.summe > 0 ? st.betrag / analyseAnteile.summe : 0;
+  const abschnitt = svg.closest('section');
+  const wrap = svg.closest('.dia-wrap');
+  const tip = wrap && wrap.querySelector('.dia-tip');
+  if (tip) {
+    tip.innerHTML = '<b>' + escapeHtml(st.name) + '</b><span>' + escapeHtml(formatCHF(st.betrag)) +
+      ' · ' + (anteil * 100).toFixed(anteil < 0.1 ? 1 : 0) + ' %</span>';
+    tip.hidden = false;
+    const breite = wrap.clientWidth;
+    const halb = tip.offsetWidth / 2;
+    /* Mitte des Stuecks, damit die Box ueber dem getroffenen Bogen sitzt */
+    const mitte = analyseAnteile.winkel[i];
+    const x = (KUCHEN.cx + Math.cos(mitte) * (KUCHEN.r + KUCHEN.ri) / 2) / DIA.breite * breite;
+    const y = (KUCHEN.cy + Math.sin(mitte) * (KUCHEN.r + KUCHEN.ri) / 2) / DIA.breite * breite;
+    tip.style.left = Math.max(halb, Math.min(breite - halb, x)) + 'px';
+    tip.style.top = Math.max(0, y - 34) + 'px';
+  }
+  svg.querySelectorAll('.stueck').forEach((el) => el.classList.toggle('an', Number(el.dataset.i) === i));
+  if (abschnitt) {
+    abschnitt.querySelectorAll('.legende-zeile').forEach((el) => el.classList.toggle('an', Number(el.dataset.i) === i));
+  }
+  if (quelle) quelle.classList.add('an');
+}
+
 /* Ruhezustand: Box weg, Hervorhebung zurueck auf den gewaehlten Monat. */
 function analyseWertZuruecksetzen(svg) {
   const id = svg.dataset.dia;
   const el = $('dia-wert-' + id);
   const wrap = svg.closest('.dia-wrap');
   const tip = wrap && wrap.querySelector('.dia-tip');
-  if (tip) tip.hidden = true;
+  if (tip) { tip.hidden = true; tip.style.top = ''; }
+  if (id === 'kostenanteile') {
+    svg.querySelectorAll('.stueck').forEach((el) => el.classList.remove('an'));
+    const abschnitt = svg.closest('section');
+    if (abschnitt) abschnitt.querySelectorAll('.legende-zeile').forEach((el) => el.classList.remove('an'));
+    return;
+  }
   const jetztIndex = analyseReihe.findIndex((r) => r.monat === uebersichtMonat);
   if (id === 'sparbetrag-monat') {
     const i = jetztIndex > -1 ? jetztIndex : 0;
@@ -2110,9 +2122,18 @@ function analyseWertZuruecksetzen(svg) {
   }
 }
 
+/* Beim Kuchen liefert das getroffene Stueck den Index direkt — beim
+   Balken- und Verlaufsdiagramm kommt er aus der x-Position. */
 function analyseZeiger(e) {
   const svg = e.target.closest('svg.diagramm');
+  const zeile = e.target.closest && e.target.closest('.legende-zeile');
+  if (zeile) { analyseAnteilZeigen(zeile.closest('section').querySelector('svg.diagramm'), Number(zeile.dataset.i), zeile); return; }
   if (!svg) return;
+  if (svg.dataset.dia === 'kostenanteile') {
+    const stueck = e.target.closest('[data-i]');
+    if (stueck) analyseAnteilZeigen(svg, Number(stueck.dataset.i));
+    return;
+  }
   const box = svg.getBoundingClientRect();
   if (!box.width) return;
   const x = (e.clientX - box.left) / box.width * DIA.breite;
@@ -2134,6 +2155,82 @@ document.addEventListener('contextmenu', (e) => {
     if (svg) analyseWertZuruecksetzen(svg);
   }, true);
 });
+
+/* ---------- Kreisdiagramm: wohin das Geld geht ----------
+   Dieselben Bestandteile wie der Sparbetrag auf der Uebersicht, nur nach
+   Kostengruppe aufgeteilt: eigene Kosten in ihrem Zahlungsmonat, Topfkosten
+   als gleichbleibende Einzahlung. Die Stuecke ergeben darum zusammen genau
+   die Einnahmen des Jahres. */
+const KUCHEN = { cx: 160, cy: 88, r: 64, ri: 37, hoehe: 182 };
+
+function kostenAnteileJahr() {
+  const jahr = jahrVon(uebersichtMonat);
+  const proGruppe = {};
+  monateImJahr(jahr).forEach((m) => {
+    dok.budgetposten.filter((p) => istGueltig(p, m)).forEach((p) => {
+      const k = dok.kategorien.find((x) => x.id === p.kategorieId) || {};
+      const g = (k.gruppe && k.gruppe.trim()) || 'Ohne Gruppe';
+      const betrag = istPersonenTraeger(p.traeger) ? betragFaellig(p, m) : betragGeglaettet(p);
+      proGruppe[g] = (proGruppe[g] || 0) + betrag;
+    });
+  });
+  const rang = (g) => { const i = GRUPPEN.indexOf(g); return i > -1 ? i : GRUPPEN.length; };
+  const stuecke = Object.keys(proGruppe)
+    .filter((g) => proGruppe[g] > 0)
+    .sort((a, b) => (rang(a) - rang(b)) || a.localeCompare(b, 'de-CH'))
+    .map((g) => ({ name: g, betrag: proGruppe[g], sparen: false }));
+
+  const gespart = monateImJahr(jahr).reduce((a, m) => a + sparbetragImMonat(m), 0);
+  if (gespart > 0) stuecke.unshift({ name: 'Gespart', betrag: gespart, sparen: true });
+  return { stuecke, gespart, summe: stuecke.reduce((a, x) => a + x.betrag, 0) };
+}
+
+/* Ein Ring statt einer vollen Scheibe — die Flaechen bleiben vergleichbar
+   und die Mitte kann leer bleiben. */
+function kreisbogen(a0, a1, r, ri) {
+  const punkt = (a, rad) => [(KUCHEN.cx + rad * Math.cos(a)).toFixed(2), (KUCHEN.cy + rad * Math.sin(a)).toFixed(2)];
+  const gross = (a1 - a0) > Math.PI ? 1 : 0;
+  const [ax, ay] = punkt(a0, r), [bx, by] = punkt(a1, r);
+  const [cx2, cy2] = punkt(a1, ri), [dx, dy] = punkt(a0, ri);
+  return 'M ' + ax + ' ' + ay + ' A ' + r + ' ' + r + ' 0 ' + gross + ' 1 ' + bx + ' ' + by +
+    ' L ' + cx2 + ' ' + cy2 + ' A ' + ri + ' ' + ri + ' 0 ' + gross + ' 0 ' + dx + ' ' + dy + ' Z';
+}
+
+/* Eine Akzentfarbe, abgestuft (DESIGN.md): "Gespart" voll, die Kosten in
+   absteigender Deckkraft. */
+function kuchenDeckkraft(stueck, i, anzahl) {
+  if (stueck.sparen) return 1;
+  const stufen = Math.max(anzahl - 1, 1);
+  return (0.62 - (0.42 * (i - 1)) / stufen).toFixed(3);
+}
+
+function diagrammKostenanteile() {
+  const { stuecke, summe } = kostenAnteileJahr();
+  if (!stuecke.length || summe <= 0) {
+    return '<p class="leer">Noch keine Kosten erfasst.</p>';
+  }
+  let winkel = -Math.PI / 2;
+  let ringe = '', legende = '';
+  stuecke.forEach((st, i) => {
+    const anteil = st.betrag / summe;
+    const bis = winkel + anteil * 2 * Math.PI;
+    const deck = kuchenDeckkraft(st, i, stuecke.length);
+    const d = anteil > 0.9999
+      ? 'M ' + (KUCHEN.cx - KUCHEN.r) + ' ' + KUCHEN.cy + ' a ' + KUCHEN.r + ' ' + KUCHEN.r + ' 0 1 1 ' + (2 * KUCHEN.r) + ' 0 a ' +
+        KUCHEN.r + ' ' + KUCHEN.r + ' 0 1 1 ' + (-2 * KUCHEN.r) + ' 0 Z M ' + (KUCHEN.cx - KUCHEN.ri) + ' ' + KUCHEN.cy + ' a ' +
+        KUCHEN.ri + ' ' + KUCHEN.ri + ' 0 1 0 ' + (2 * KUCHEN.ri) + ' 0 a ' + KUCHEN.ri + ' ' + KUCHEN.ri + ' 0 1 0 ' + (-2 * KUCHEN.ri) + ' 0 Z'
+      : kreisbogen(winkel, bis, KUCHEN.r, KUCHEN.ri);
+    ringe += '<path class="stueck" data-i="' + i + '" d="' + d + '" opacity="' + deck + '"/>';
+    legende += '<div class="row legende-zeile" data-i="' + i + '"><div class="name">' +
+      '<span class="punkt-farbe" style="opacity:' + deck + '"></span><b>' + escapeHtml(st.name) + '</b>' +
+      '<span class="anteil">' + (anteil * 100).toFixed(anteil < 0.1 ? 1 : 0) + ' %</span></div>' +
+      '<div class="mark">' + escapeHtml(formatCHF(st.betrag)) + '</div></div>';
+    winkel = bis;
+  });
+  return '<svg class="diagramm" data-dia="kostenanteile" viewBox="0 0 ' + DIA.breite + ' ' + KUCHEN.hoehe +
+    '" role="img" aria-label="Anteile am Einkommen">' + ringe + '</svg>' +
+    '<div class="legende">' + legende + '</div>';
+}
 
 const ANALYSE_DIAGRAMME = [
   {
@@ -2157,6 +2254,17 @@ const ANALYSE_DIAGRAMME = [
       ['Start', 'beginnt im Januar bei null — bereits vorhandenes Vermögen ist nicht enthalten']
     ],
     zeichnen: diagrammErspartesKumuliert
+  },
+  {
+    id: 'kostenanteile',
+    titel: 'Wohin das Geld geht',
+    hinweis: 'Anteil jeder Kostengruppe am Einkommen des Jahres, dazu der gesparte Teil. Antippen zeigt Betrag und Anteil.',
+    info: [
+      ['Grundlage', 'dieselbe Rechnung wie der Sparbetrag: eigene Kosten im Zahlungsmonat, Topfkosten als gleichbleibende Einzahlung'],
+      ['Summe', 'alle Stücke zusammen ergeben die Einnahmen des Jahres'],
+      ['Ohne "Gespart"', 'bleibt nichts übrig, fehlt das Stück — die Kosten übersteigen dann die Einnahmen']
+    ],
+    zeichnen: diagrammKostenanteile
   }
 ];
 
@@ -2173,9 +2281,19 @@ function renderAnalyse() {
   let lauf = 0;
   analyseKumuliert = reihe.map((r) => { lauf += r.wert; return lauf; });
 
+  analyseAnteile = kostenAnteileJahr();
+  /* Mittelwinkel je Stueck merken, damit die Wertbox ueber dem Bogen sitzt */
+  let w = -Math.PI / 2;
+  analyseAnteile.winkel = analyseAnteile.stuecke.map((st) => {
+    const anteil = analyseAnteile.summe > 0 ? st.betrag / analyseAnteile.summe : 0;
+    const mitte = w + anteil * Math.PI;
+    w += anteil * 2 * Math.PI;
+    return mitte;
+  });
+
   $('analyse-liste').innerHTML = ANALYSE_DIAGRAMME.map((d) =>
     '<section><h2>' + escapeHtml(d.titel) + infoKnopfHTML(d.info) + '</h2>' +
-    '<p class="dia-wert" id="dia-wert-' + d.id + '"></p>' +
+    (d.id === 'kostenanteile' ? '' : '<p class="dia-wert" id="dia-wert-' + d.id + '"></p>') +
     '<div class="dia-wrap"><div class="dia-tip" hidden></div>' + d.zeichnen(reihe) + '</div>' +
     '<p class="note" style="margin:8px 0 12px">' + escapeHtml(d.hinweis) + '</p></section>'
   ).join('');
@@ -2548,7 +2666,6 @@ function behandeln(action, el) {
       break;
     }
     case 'wizard-einnahme-13tes': wizardEinnahme13tesUmschalten(d.id, el.checked); break;
-    case 'wizard-gruppe-liste': wizardGruppeListe(d.id); break;
     case 'wizard-modus': wizardModus = d.modus; renderWizardSchritt(); break;
     case 'alles-zuruecksetzen': allesZuruecksetzen(); break;
   }
@@ -2575,8 +2692,8 @@ document.addEventListener('change', (e) => {
   if (mEl) { monatJahrGeaendert(mEl); return; }
   /* Assistenten-Auswahlfelder ohne data-feld: der gewaehlte Wert wird
      nicht direkt in ein Datenfeld geschrieben (siehe Handler). */
-  const gEl = e.target.closest('[data-action="wizard-gruppe-wahl"]');
-  if (gEl) { wizardGruppeGewaehlt(gEl); return; }
+  const gEl = e.target.closest('[data-action="gruppe-wahl"]');
+  if (gEl) { gruppeGewaehlt(gEl); return; }
   const mmEl = e.target.closest('[data-action="wizard-13tes-monat"]');
   if (mmEl) { wizard13tesMonatGewaehlt(mmEl); return; }
   const fEl = e.target.closest('[data-action="faellig-monat"]');
