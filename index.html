@@ -29,9 +29,10 @@
   --kat-0:#8B968F;
   --kat-1:#1E7546; --kat-2:#3DA5CD; --kat-3:#6C5399; --kat-4:#91A24F; --kat-5:#954D25;
   --kat-6:#C27EB3; --kat-7:#4161A2; --kat-8:#B99240; --kat-9:#974554; --kat-10:#24AEA8;
-  /* Leichte Transparenz, damit die Farben zum ruhigen Rest passen. Dunkel
-     etwas weniger: dort sacken die Farben zur Karte hin ab. */
-  --kat-deck:.85;
+  /* Transparenz, damit die Farben zum ruhigen Rest der App passen. Beide
+     Modi gleich; unter 75 Prozent waere die Trennung benachbarter Stuecke
+     nicht mehr vertretbar (DESIGN.md). */
+  --kat-deck:.78;
 }
 @media (prefers-color-scheme:dark){
   :root{
@@ -41,7 +42,6 @@
     --kat-0:#7C8A83;
     --kat-1:#127946; --kat-2:#21A0CB; --kat-3:#7054A1; --kat-4:#8A9C40; --kat-5:#9C4D20;
     --kat-6:#BF75AF; --kat-7:#4063AA; --kat-8:#B68B2B; --kat-9:#9E4455; --kat-10:#00A9A4;
-    --kat-deck:.9;
   }
   select{
     background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 8'%3E%3Cpath d='M1 1.6 6 6.4 11 1.6' fill='none' stroke='%238FA098' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
@@ -2228,14 +2228,17 @@ function kostenAnteileJahr() {
       proGruppe[g] = (proGruppe[g] || 0) + betrag;
     });
   });
-  const rang = (g) => { const i = GRUPPEN.indexOf(g); return i > -1 ? i : GRUPPEN.length; };
   const stuecke = Object.keys(proGruppe)
     .filter((g) => proGruppe[g] > 0)
-    .sort((a, b) => (rang(a) - rang(b)) || a.localeCompare(b, 'de-CH'))
     .map((g) => ({ name: g, betrag: proGruppe[g], sparen: false }));
 
   const gespart = monateImJahr(jahr).reduce((a, m) => a + sparbetragImMonat(m), 0);
-  if (gespart > 0) stuecke.unshift({ name: 'Gespart', betrag: gespart, sparen: true });
+  if (gespart > 0) stuecke.push({ name: 'Gespart', betrag: gespart, sparen: true });
+
+  /* Groesstes Stueck zuerst — im Ring im Uhrzeigersinn ab zwoelf Uhr, in der
+     Legende von oben. Die Farbe haengt an der Gruppe, nicht an der Position
+     (gruppenFarbe), die Sortierung faerbt also nichts um. */
+  stuecke.sort((a, b) => (b.betrag - a.betrag) || a.name.localeCompare(b.name, 'de-CH'));
   return { stuecke, gespart, summe: stuecke.reduce((a, x) => a + x.betrag, 0) };
 }
 
