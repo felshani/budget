@@ -58,11 +58,19 @@ Regeln dazu:
 - **Feste Farbtöne im Abstand von 36 Grad, abwechselnd tiefe und helle
   Stufe.** Die Helligkeitsalternanz ist das, was benachbarte Stücke auch bei
   Farbsehschwäche auseinanderhält — nicht der Farbton allein.
+- **Leicht transparent.** `--kat-deck` steht hell auf 85 %, dunkel auf 90 % —
+  damit die Farben zum ruhigen Rest der App passen. Umgesetzt als
+  `fill-opacity`, nicht als `opacity`, damit die Trennfuge zwischen den
+  Stücken voll deckend bleibt; das gewählte Stück läuft auf 100 %. Dunkel
+  verträgt weniger Transparenz, weil die Farben dort zur Karte hin absacken.
+  Unter 75 % wird es unzulässig: bei 70 % fällt die Trennung benachbarter
+  Stücke unter Normalsicht auf ΔE 14.7 und reisst damit die harte Grenze.
 - **Geprüft, nicht geschätzt.** Die Palette hält die Grenzwerte der
-  Datenvisualisierungs-Methode ein: benachbarte Stücke ΔE 13.9 hell und 10.9
-  dunkel unter simulierter Rot-Grün-Schwäche (Ziel ≥ 8), unter Normalsicht
-  22.1 und 20.4 (harte Grenze 15) — auch dann noch, wenn eine Gruppe fehlt und
-  andere Stücke aneinandergrenzen.
+  Datenvisualisierungs-Methode ein, gemessen an der über der Karte
+  zusammengerechneten Farbe: benachbarte Stücke ΔE 11.6 hell und 9.9 dunkel
+  unter simulierter Rot-Grün-Schwäche (Ziel ≥ 8), unter Normalsicht 18.5 und
+  18.7 (harte Grenze 15) — auch dann noch, wenn eine Gruppe fehlt und andere
+  Stücke aneinandergrenzen. Voll deckend wären es 13.9/10.9 und 22.1/20.4.
 - **Farbe steht nie allein.** Zehn Kategorien sind mehr, als eine Palette
   paarweise sauber trennen kann; fünf helle Stufen liegen zudem knapp unter
   3:1 Kontrast zur Karte. Getragen wird das von den Trennfugen zwischen den
