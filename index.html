@@ -29,6 +29,10 @@
   --kat-0:#8B968F;
   --kat-1:#1E7546; --kat-2:#3DA5CD; --kat-3:#6C5399; --kat-4:#91A24F; --kat-5:#954D25;
   --kat-6:#C27EB3; --kat-7:#4161A2; --kat-8:#B99240; --kat-9:#974554; --kat-10:#24AEA8;
+  /* Transparenz, damit die Farben zum ruhigen Rest der App passen. Beide
+     Modi gleich; unter 75 Prozent waere die Trennung benachbarter Stuecke
+     nicht mehr vertretbar (DESIGN.md). */
+  --kat-deck:.78;
 }
 @media (prefers-color-scheme:dark){
   :root{
@@ -188,8 +192,10 @@ button:active{opacity:.72}
 .dia-tip b{font-family:var(--sans);font-weight:650;margin-right:5px}
 /* Kreisdiagramm: eine feste Farbe je Kostengruppe (Ausnahme in DESIGN.md).
    Die Trennfuge in Kartenfarbe haelt die Stuecke auseinander. */
-.diagramm .stueck{stroke:var(--card);stroke-width:1.5}
-.diagramm .stueck.an{stroke:var(--ink);stroke-width:2.5}
+/* fill-opacity statt opacity: die Trennfuge zwischen den Stuecken bleibt
+   damit voll deckend. Das gewaehlte Stueck steht auf voller Deckkraft. */
+.diagramm .stueck{stroke:var(--card);stroke-width:1.5;fill-opacity:var(--kat-deck)}
+.diagramm .stueck.an{stroke:var(--ink);stroke-width:2.5;fill-opacity:1}
 .diagramm text.mitte-titel{fill:var(--ink-soft);font-size:11.5px}
 /* Der Anteil ist die Hauptzahl, der Betrag steht kleiner darunter */
 .diagramm text.mitte-wert{fill:var(--ink);font-family:var(--mono);font-size:26px;font-weight:650}
@@ -199,7 +205,8 @@ button:active{opacity:.72}
 .legende-zeile.an .name b{color:var(--ink)}
 .legende-zeile .name{display:flex;align-items:baseline;gap:7px}
 .legende-zeile .name b{font-weight:550;font-size:14px}
-.punkt-farbe{width:10px;height:10px;border-radius:3px;background:var(--ink-soft);flex:0 0 auto;align-self:center}
+.punkt-farbe{width:10px;height:10px;border-radius:3px;background:var(--ink-soft);
+  opacity:var(--kat-deck);flex:0 0 auto;align-self:center}
 /* Die ganze Box mit dem Kreisdiagramm oeffnet das Detailfenster */
 .tippbar{cursor:pointer}
 .tippbar:active{opacity:.72}
@@ -2221,14 +2228,17 @@ function kostenAnteileJahr() {
       proGruppe[g] = (proGruppe[g] || 0) + betrag;
     });
   });
-  const rang = (g) => { const i = GRUPPEN.indexOf(g); return i > -1 ? i : GRUPPEN.length; };
   const stuecke = Object.keys(proGruppe)
     .filter((g) => proGruppe[g] > 0)
-    .sort((a, b) => (rang(a) - rang(b)) || a.localeCompare(b, 'de-CH'))
     .map((g) => ({ name: g, betrag: proGruppe[g], sparen: false }));
 
   const gespart = monateImJahr(jahr).reduce((a, m) => a + sparbetragImMonat(m), 0);
-  if (gespart > 0) stuecke.unshift({ name: 'Gespart', betrag: gespart, sparen: true });
+  if (gespart > 0) stuecke.push({ name: 'Gespart', betrag: gespart, sparen: true });
+
+  /* Groesstes Stueck zuerst — im Ring im Uhrzeigersinn ab zwoelf Uhr, in der
+     Legende von oben. Die Farbe haengt an der Gruppe, nicht an der Position
+     (gruppenFarbe), die Sortierung faerbt also nichts um. */
+  stuecke.sort((a, b) => (b.betrag - a.betrag) || a.name.localeCompare(b.name, 'de-CH'));
   return { stuecke, gespart, summe: stuecke.reduce((a, x) => a + x.betrag, 0) };
 }
 

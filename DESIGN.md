@@ -56,16 +56,30 @@ Regeln dazu:
   Dunkelblock; `--kat-0` ist der neutrale Platz für „Ohne Gruppe" und für
   Gruppen aus älteren Dateien.
 - **Feste Farbtöne im Abstand von 36 Grad, abwechselnd tiefe und helle
-  Stufe.** Die Helligkeitsalternanz ist das, was benachbarte Stücke auch bei
-  Farbsehschwäche auseinanderhält — nicht der Farbton allein.
-- **Geprüft, nicht geschätzt.** Die Palette hält die Grenzwerte der
-  Datenvisualisierungs-Methode ein: benachbarte Stücke ΔE 13.9 hell und 10.9
-  dunkel unter simulierter Rot-Grün-Schwäche (Ziel ≥ 8), unter Normalsicht
-  22.1 und 20.4 (harte Grenze 15) — auch dann noch, wenn eine Gruppe fehlt und
-  andere Stücke aneinandergrenzen.
-- **Farbe steht nie allein.** Zehn Kategorien sind mehr, als eine Palette
-  paarweise sauber trennen kann; fünf helle Stufen liegen zudem knapp unter
-  3:1 Kontrast zur Karte. Getragen wird das von den Trennfugen zwischen den
-  Stücken und davon, dass die Legende mit Name, Anteil und Betrag im
-  Detailfenster immer neben dem Ring steht. Ein Diagramm, bei dem die Zuordnung
-  allein an der Farbe hängt, wäre nicht zulässig.
+  Stufe.** Die Helligkeitsalternanz hält Farbtöne auseinander, die einander
+  ähnlich sind — nicht der Farbton allein.
+- **Transparent.** `--kat-deck` steht in beiden Modi auf 78 %, damit die
+  Farben zum ruhigen Rest der App passen. Umgesetzt als `fill-opacity`, nicht
+  als `opacity`, damit die Trennfuge zwischen den Stücken voll deckend bleibt;
+  das gewählte Stück läuft auf 100 %. Unter 75 % wird es unzulässig: bei 70 %
+  fällt die Trennung benachbarter Stücke unter Normalsicht auf ΔE 14.7 und
+  reisst damit die harte Grenze.
+- **Geprüft, nicht geschätzt.** Gemessen wird die über der Karte
+  zusammengerechnete Farbe, nicht der rohe Farbwert. Bei 78 % erreichen
+  benachbarte Stücke ΔE 10.6 hell und 8.7 dunkel unter simulierter
+  Rot-Grün-Schwäche (Ziel ≥ 8), unter Normalsicht 16.8 und 16.5 (harte
+  Grenze 15).
+- **Farbe steht nie allein — und seit der Sortierung nach Grösse erst recht
+  nicht.** Die Stücke stehen nach Betrag absteigend, im Ring im Uhrzeigersinn
+  und in der Legende von oben. Welche Farben dabei nebeneinander liegen, hängt
+  damit von den Zahlen ab und nicht mehr von einer festen Reihenfolge; die
+  frühere Zusicherung über benachbarte Stücke gilt nur noch für den Regelfall,
+  nicht für jede mögliche Kombination. Über alle Paare gerechnet ist das Set
+  nicht trennbar — zehn Kategorien sind mehr, als eine Palette leisten kann
+  (die Methode deckelt bei acht, für „jede kann neben jeder liegen" bei drei),
+  und keine andere Palette und keine Umsortierung ändert das. Getragen wird
+  das Diagramm darum von den Trennfugen zwischen den Stücken, vom
+  hervorgehobenen Stück samt Namen in der Ringmitte und davon, dass die
+  Legende mit Name, Anteil und Betrag in derselben Reihenfolge immer neben dem
+  Ring steht. Ein Diagramm, bei dem die Zuordnung allein an der Farbe hängt,
+  wäre nicht zulässig.
