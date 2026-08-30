@@ -315,9 +315,27 @@ nav.tabbar button:active{opacity:.7}
    Bottom-Sheet-Bausteins — hoeher als das kompakte Erfassen-Sheet, damit
    er als eigenstaendiger, gefuehrter Ablauf statt als kleines Menue
    wirkt; Hintergrund nur leicht statt kraeftig abgedunkelt. */
-/* Fast bildschirmfuellende Ausfuehrung: Assistent und Detailfenster */
+/* Fast bildschirmfuellende Ausfuehrung: der Assistent */
 .gross-sheet{height:92vh;max-height:92vh}
 .wizard-overlay.offen{background:rgba(0,0,0,.25)}
+
+/* Vollbild: uebernimmt den ganzen Schirm, statt als Sheet darueber zu
+   liegen — fuer das Detailfenster des Kreisdiagramms. Faehrt weiterhin von
+   unten herein (wie eine modale Vollbildansicht auf iOS), hat aber keinen
+   sichtbaren Rand mehr: kein Griff zum Wischen, keine abgerundeten Ecken,
+   kein antippbarer Hintergrund. Geschlossen wird ueber X und den
+   Schliessen-Knopf. Oben die Safe Area beachten, sonst liegt die Kopfzeile
+   unter der Statusleiste. */
+.voll-sheet{
+  height:100%;max-height:none;max-width:none;border-radius:0;
+  padding-top:env(safe-area-inset-top);
+}
+.voll-sheet .sheet-griff{display:none}
+/* Ohne Griff faengt die Kopfzeile ganz oben an — X und Titel brauchen darum
+   selbst Luft, sonst kleben sie am Bildschirmrand. Das X sitzt absolut zur
+   Kopfzeile und nimmt deren Innenabstand nicht mit. */
+.voll-sheet .sheet-kopf{padding-top:16px}
+.voll-sheet .sheet-schliessen{top:12px}
 .sheet-griff{width:36px;height:4px;border-radius:2px;background:var(--rule);margin:10px auto 0;flex:0 0 auto}
 .sheet-kopf{position:relative;display:flex;align-items:center;justify-content:center;
   padding:10px 48px 14px;border-bottom:1px solid var(--rule);flex:0 0 auto}
@@ -591,10 +609,10 @@ nav.tabbar button:active{opacity:.7}
     </div>
   </div>
 
-  <!-- Detailfenster des Kreisdiagramms: dieselbe Sheet-Komponente, fast
-       bildschirmfuellend, mit Ring und Legende zusammen. -->
+  <!-- Detailfenster des Kreisdiagramms: dieselbe Sheet-Komponente, aber als
+       Vollbild — es uebernimmt den Schirm, mit Ring und Legende zusammen. -->
   <div class="sheet-overlay" id="kuchen-overlay">
-    <div class="sheet gross-sheet" id="kuchen-sheet">
+    <div class="sheet voll-sheet" id="kuchen-sheet">
       <div class="sheet-griff" aria-hidden="true"></div>
       <div class="sheet-kopf">
         <button type="button" class="sheet-schliessen" data-action="kuchen-schliessen" aria-label="Schliessen">&times;</button>

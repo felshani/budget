@@ -20,6 +20,31 @@
 - padding-bottom: env(safe-area-inset-bottom) beachten.
 - Nie ein Sheet aus einem Sheet öffnen.
 
+Drei Ausprägungen desselben Bausteins, absteigend nach Platzbedarf:
+
+| Ausprägung | Höhe | Hintergrund | Wofür |
+|---|---|---|---|
+| Sheet | so hoch wie nötig, max. 90 % | 40 % | Erfassen und Bearbeiten |
+| `.gross-sheet` | 92 % | 25 % | der Assistent — ein geführter Ablauf, kein Menü |
+| `.voll-sheet` | 100 % | verdeckt | eine Ansicht, die den Schirm übernimmt |
+
+## Vollbild
+
+Sparsam einsetzen: nur, wenn eine Ansicht den ganzen Schirm braucht und für
+sich steht — heute allein das Detailfenster des Kreisdiagramms, wo Ring und
+Legende zusammen gelesen werden.
+
+- Fährt wie ein Sheet von unten herein, füllt danach aber alles: keine
+  abgerundeten Ecken, kein Griff-Balken, kein sichtbarer Hintergrund.
+- `padding-top: env(safe-area-inset-top)` — sonst liegt die Kopfzeile unter
+  der Statusleiste.
+- Geschlossen wird über X oben links und den Primärbutton unten. Wischen und
+  Tap auf den Hintergrund fallen weg, weil es keinen Hintergrund mehr gibt;
+  darum müssen beide sichtbaren Wege vorhanden sein — ein Vollbild ohne
+  sichtbaren Ausgang ist eine Sackgasse.
+- Kein Verlaufseintrag: Die App hat keine Navigation, ein Zurück-Wisch führt
+  aus der App heraus statt aus der Ansicht.
+
 ## Beträge
 - Bei Betragseingabe: grosse Zahl mittig im Sheet,
   inputmode="decimal", Fokus automatisch.
